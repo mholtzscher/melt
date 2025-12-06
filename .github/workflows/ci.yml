@@ -8,6 +8,9 @@ on:
 
 jobs:
   typecheck:
+    permissions:
+      contents: read
+      id-token: write
     name: Typecheck
     runs-on: ubuntu-latest
     steps:

@@ -1,12 +1,13 @@
 import { For, Show } from "solid-js";
-import type { FlakeInput } from "../lib/types";
-import { theme } from "../lib/theme";
+import type { FlakeInput, UpdateStatus } from "../lib/types";
+import { theme, mocha } from "../lib/theme";
 import { formatRelativeTime } from "../lib/flake";
 
 interface FlakeListProps {
   inputs: FlakeInput[];
   cursorIndex: number;
   selectedIndices: Set<number>;
+  updateStatuses: Map<string, UpdateStatus>;
 }
 
 function getTypeBadgeColor(type: FlakeInput["type"]): string {
@@ -48,7 +49,10 @@ export function FlakeList(props: FlakeListProps) {
         <box width={10}>
           <text fg={theme.textDim}>REV</text>
         </box>
-        <text fg={theme.textDim}>UPDATED</text>
+        <box width={14}>
+          <text fg={theme.textDim}>UPDATED</text>
+        </box>
+        <text fg={theme.textDim}>STATUS</text>
       </box>
 
       <For each={props.inputs}>
@@ -93,9 +97,31 @@ export function FlakeList(props: FlakeListProps) {
               </box>
 
               {/* Last modified (relative time) */}
-              <text fg={theme.textMuted}>
-                {formatRelativeTime(input.lastModified)}
-              </text>
+              <box width={14}>
+                <text fg={theme.textMuted}>
+                  {formatRelativeTime(input.lastModified)}
+                </text>
+              </box>
+
+              {/* Update indicator */}
+              {(() => {
+                const status = props.updateStatuses.get(input.name);
+                if (!status) return <text fg={theme.textDim}>-</text>;
+                if (status.loading) {
+                  return <text fg={theme.textDim}>...</text>;
+                }
+                if (status.error) {
+                  return <text fg={mocha.yellow}>?</text>;
+                }
+                if (status.hasUpdate) {
+                  return (
+                    <text fg={mocha.green}>
+                      +{status.commitsBehind}
+                    </text>
+                  );
+                }
+                return <text fg={theme.textDim}>ok</text>;
+              })()}
             </box>
           );
         }}

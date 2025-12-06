@@ -1,4 +1,8 @@
-import type { GitHubCommit, FlakeInput } from "./types";
+import type { GitHubCommit, FlakeInput, UpdateStatus } from "./types";
+
+// Get GitHub token from environment for higher rate limits
+// Supports GITHUB_TOKEN, GH_TOKEN, and GITHUB_PAT
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_PAT;
 
 interface GitHubAPICommit {
   sha: string;
@@ -10,6 +14,22 @@ interface GitHubAPICommit {
     };
   };
   html_url: string;
+}
+
+/**
+ * Get headers for GitHub API requests
+ */
+function getGitHubHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github.v3+json",
+    "User-Agent": "melt-tui",
+  };
+
+  if (GITHUB_TOKEN) {
+    headers.Authorization = `token ${GITHUB_TOKEN}`;
+  }
+
+  return headers;
 }
 
 /**
@@ -31,13 +51,16 @@ export async function getCommitsSinceRev(
     const url = `https://api.github.com/repos/${owner}/${repo}/commits?per_page=${perPage}&page=${page}`;
 
     const response = await fetch(url, {
-      headers: {
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "melt-tui",
-      },
+      headers: getGitHubHeaders(),
     });
 
     if (!response.ok) {
+      if (response.status === 403) {
+        const remaining = response.headers.get("X-RateLimit-Remaining");
+        if (remaining === "0") {
+          throw new Error("GitHub API rate limit exceeded");
+        }
+      }
       throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
     }
 
@@ -79,6 +102,57 @@ export async function getChangelog(input: FlakeInput): Promise<GitHubCommit[]> {
   }
 
   return getCommitsSinceRev(input.owner, input.repo, input.rev);
+}
+
+/**
+ * Check if an update is available for a flake input (GitHub only)
+ */
+async function checkForUpdate(input: FlakeInput): Promise<UpdateStatus> {
+  try {
+    const commits = await getCommitsSinceRev(input.owner!, input.repo!, input.rev);
+    return {
+      hasUpdate: commits.length > 0,
+      commitsBehind: commits.length,
+      loading: false,
+    };
+  } catch (error) {
+    return {
+      hasUpdate: false,
+      commitsBehind: 0,
+      loading: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Check for updates on multiple inputs in parallel
+ * With GITHUB_TOKEN, rate limit is 5000/hour; without it's 60/hour
+ */
+export async function checkForUpdates(
+  inputs: FlakeInput[]
+): Promise<Map<string, UpdateStatus>> {
+  const results = new Map<string, UpdateStatus>();
+  
+  // Filter to only GitHub inputs
+  const githubInputs = inputs.filter(
+    (input) => input.type === "github" && input.owner && input.repo
+  );
+
+  const checks = githubInputs.map(async (input) => {
+    const status = await checkForUpdate(input);
+    results.set(input.name, status);
+  });
+
+  await Promise.all(checks);
+  return results;
+}
+
+/**
+ * Check if GitHub token is configured
+ */
+export function hasGitHubToken(): boolean {
+  return !!GITHUB_TOKEN;
 }
 
 /**

@@ -1,6 +1,7 @@
-import { For, Show } from "solid-js";
+import { For, Show, createEffect } from "solid-js";
 import type { GitHubCommit, FlakeInput } from "../lib/types";
 import { theme, mocha } from "../lib/theme";
+import type { ScrollBoxRenderable } from "@opentui/core";
 
 interface ChangelogProps {
   input: FlakeInput;
@@ -10,6 +11,16 @@ interface ChangelogProps {
 }
 
 export function Changelog(props: ChangelogProps) {
+  let scrollBoxRef: ScrollBoxRenderable | undefined;
+
+  // Scroll to keep cursor visible
+  createEffect(() => {
+    const cursor = props.cursorIndex;
+    if (scrollBoxRef) {
+      scrollBoxRef.scrollTop = Math.max(0, cursor - 5);
+    }
+  });
+
   return (
     <box flexDirection="column" flexGrow={1}>
       {/* Header */}
@@ -18,6 +29,8 @@ export function Changelog(props: ChangelogProps) {
         backgroundColor={theme.bgDark}
         paddingLeft={1}
         paddingRight={1}
+        flexShrink={0}
+        height={1}
       >
         <text fg={theme.accent} attributes={1}>
           Changelog: {props.input.name}
@@ -30,7 +43,8 @@ export function Changelog(props: ChangelogProps) {
         flexDirection="row"
         paddingLeft={1}
         paddingRight={1}
-        marginBottom={1}
+        flexShrink={0}
+        height={1}
       >
         <text fg={theme.textDim}>Commits since </text>
         <text fg={mocha.peach}>{props.input.shortRev}</text>
@@ -38,7 +52,7 @@ export function Changelog(props: ChangelogProps) {
 
       {/* Loading state */}
       <Show when={props.loading}>
-        <box paddingLeft={1}>
+        <box paddingLeft={1} flexGrow={1}>
           <text fg={theme.warning}>Loading commits...</text>
         </box>
       </Show>
@@ -48,54 +62,63 @@ export function Changelog(props: ChangelogProps) {
         <Show
           when={props.commits.length > 0}
           fallback={
-            <box paddingLeft={1}>
+            <box paddingLeft={1} flexGrow={1}>
               <text fg={theme.success}>Already up to date!</text>
             </box>
           }
         >
-          <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1}>
-            <For each={props.commits}>
-              {(commit, index) => {
-                const isCursor = () => props.cursorIndex === index();
+          <scrollbox
+            ref={scrollBoxRef}
+            flexGrow={1}
+            flexShrink={1}
+            paddingLeft={1}
+            paddingRight={1}
+            overflow="hidden"
+          >
+            <box flexDirection="column">
+              <For each={props.commits}>
+                {(commit, index) => {
+                  const isCursor = () => props.cursorIndex === index();
 
-                return (
-                  <box
-                    flexDirection="row"
-                    backgroundColor={isCursor() ? theme.bgHighlight : undefined}
-                  >
-                    {/* Short SHA */}
-                    <box width={9}>
-                      <text fg={mocha.peach}>{commit.shortSha}</text>
-                    </box>
+                  return (
+                    <box
+                      flexDirection="row"
+                      backgroundColor={isCursor() ? theme.bgHighlight : undefined}
+                    >
+                      {/* Short SHA */}
+                      <box width={9}>
+                        <text fg={mocha.peach}>{commit.shortSha}</text>
+                      </box>
 
-                    {/* Author */}
-                    <box width={16}>
-                      <text fg={mocha.blue}>
-                        {commit.author.length > 14
-                          ? commit.author.substring(0, 14) + ".."
-                          : commit.author.padEnd(14)}
+                      {/* Author */}
+                      <box width={16}>
+                        <text fg={mocha.blue}>
+                          {commit.author.length > 14
+                            ? commit.author.substring(0, 14) + ".."
+                            : commit.author.padEnd(14)}
+                        </text>
+                      </box>
+
+                      {/* Date */}
+                      <box width={10}>
+                        <text fg={theme.textDim}>{commit.date.padEnd(8)}</text>
+                      </box>
+
+                      {/* Message (truncated) */}
+                      <text
+                        fg={isCursor() ? theme.cursor : theme.text}
+                        attributes={isCursor() ? 1 : 0}
+                      >
+                        {commit.message.length > 60
+                          ? commit.message.substring(0, 60) + "..."
+                          : commit.message}
                       </text>
                     </box>
-
-                    {/* Date */}
-                    <box width={10}>
-                      <text fg={theme.textDim}>{commit.date.padEnd(8)}</text>
-                    </box>
-
-                    {/* Message (truncated) */}
-                    <text
-                      fg={isCursor() ? theme.cursor : theme.text}
-                      attributes={isCursor() ? 1 : 0}
-                    >
-                      {commit.message.length > 60
-                        ? commit.message.substring(0, 60) + "..."
-                        : commit.message}
-                    </text>
-                  </box>
-                );
-              }}
-            </For>
-          </box>
+                  );
+                }}
+              </For>
+            </box>
+          </scrollbox>
         </Show>
       </Show>
 
@@ -105,7 +128,8 @@ export function Changelog(props: ChangelogProps) {
         backgroundColor={theme.bgDark}
         paddingLeft={1}
         paddingRight={1}
-        marginTop="auto"
+        flexShrink={0}
+        height={1}
       >
         <text fg={mocha.lavender}>j</text>
         <text fg={theme.textDim}>/</text>

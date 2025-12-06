@@ -7,15 +7,15 @@ import { StatusBar } from "./components/StatusBar";
 import { ErrorDialog } from "./components/ErrorDialog";
 import { Changelog } from "./components/Changelog";
 
-import { theme, mocha } from "./lib/theme";
+import { theme } from "./lib/theme";
 import {
   hasFlakeNix,
   getFlakeMetadata,
   updateInputs,
   updateAll,
 } from "./lib/flake";
-import { getChangelog } from "./lib/github";
-import type { FlakeInput, GitHubCommit, AppView } from "./lib/types";
+import { getChangelog, checkForUpdates, hasGitHubToken } from "./lib/github";
+import type { FlakeInput, GitHubCommit, AppView, UpdateStatus } from "./lib/types";
 
 // Get the flake path from command line args or use current working directory
 const flakePath = process.argv[2] || process.cwd();
@@ -43,6 +43,11 @@ function App() {
   const [changelogLoading, setChangelogLoading] = createSignal(false);
   const [changelogCursor, setChangelogCursor] = createSignal(0);
 
+  // Update status state
+  const [updateStatuses, setUpdateStatuses] = createSignal<Map<string, UpdateStatus>>(
+    new Map()
+  );
+
   // Load flake data on mount
   onMount(async () => {
     try {
@@ -58,6 +63,9 @@ function App() {
       setInputs(metadata.inputs);
       setDescription(metadata.description);
       setLoading(false);
+
+      // Check for updates in background
+      checkUpdates(metadata.inputs);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setView("error");
@@ -65,12 +73,45 @@ function App() {
     }
   });
 
-  // Refresh flake data
+  // Guard to prevent concurrent update checks
+  let isCheckingUpdates = false;
+
+  // Check for updates on all inputs
+  async function checkUpdates(inputsList?: FlakeInput[]) {
+    if (isCheckingUpdates) return;
+    isCheckingUpdates = true;
+
+    const toCheck = inputsList || inputs();
+    const tokenMsg = hasGitHubToken() ? "" : " (set GITHUB_TOKEN for higher rate limits)";
+    setStatusMessage(`Checking for updates...${tokenMsg}`);
+    
+    try {
+      const statuses = await checkForUpdates(toCheck);
+      setUpdateStatuses(statuses);
+      setStatusMessage(undefined);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      if (errorMsg.includes("rate limit")) {
+        setStatusMessage(`${errorMsg} - set GITHUB_TOKEN env var`);
+      } else {
+        setStatusMessage(`Error checking updates: ${errorMsg}`);
+      }
+      setTimeout(() => setStatusMessage(undefined), 5000);
+    } finally {
+      isCheckingUpdates = false;
+    }
+  }
+
+  // Refresh flake data and check for updates
   async function refresh() {
+    setStatusMessage("Refreshing...");
     try {
       const metadata = await getFlakeMetadata(flakePath);
       setInputs(metadata.inputs);
       setDescription(metadata.description);
+      
+      // Re-check for updates after refresh
+      await checkUpdates(metadata.inputs);
     } catch (err) {
       setStatusMessage(`Error: ${err instanceof Error ? err.message : err}`);
       setTimeout(() => setStatusMessage(undefined), 3000);
@@ -244,6 +285,9 @@ function App() {
       case "c":
         showChangelog();
         break;
+      case "r":
+        refresh();
+        break;
       case "q":
         process.exit(0);
       case "escape":
@@ -294,6 +338,7 @@ function App() {
               inputs={inputs()}
               cursorIndex={cursorIndex()}
               selectedIndices={selectedIndices()}
+              updateStatuses={updateStatuses()}
             />
           </Show>
 

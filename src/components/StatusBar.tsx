@@ -37,6 +37,9 @@ export function StatusBar(props: StatusBarProps) {
             <text fg={mocha.lavender}>c</text>
             <text fg={theme.textDim}>:log </text>
 
+            <text fg={mocha.lavender}>r</text>
+            <text fg={theme.textDim}>:refresh </text>
+
             <text fg={mocha.lavender}>q</text>
             <text fg={theme.textDim}>:quit</text>
           </box>

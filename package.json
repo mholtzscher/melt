@@ -3,8 +3,12 @@
   "module": "src/index.tsx",
   "type": "module",
   "private": true,
+  "bin": {
+    "melt": "./src/index.tsx"
+  },
   "scripts": {
-    "dev": "bun run --watch src/index.tsx"
+    "dev": "bun run --watch src/index.tsx",
+    "start": "bun run src/index.tsx"
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -21,3 +25,4 @@
     "solid-js": "^1.9.9"
   }
 }
+

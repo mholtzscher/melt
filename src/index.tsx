@@ -6,6 +6,7 @@ import { FlakeList } from "./components/FlakeList";
 import { StatusBar } from "./components/StatusBar";
 import { ErrorDialog } from "./components/ErrorDialog";
 import { Changelog } from "./components/Changelog";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 
 import { theme } from "./lib/theme";
 import {
@@ -13,6 +14,7 @@ import {
   getFlakeMetadata,
   updateInputs,
   updateAll,
+  lockInputToRev,
 } from "./lib/flake";
 import { getChangelog, checkForUpdates, hasGitHubToken } from "./lib/github";
 import type { FlakeInput, GitHubCommit, AppView, UpdateStatus } from "./lib/types";
@@ -42,6 +44,11 @@ function App() {
   );
   const [changelogLoading, setChangelogLoading] = createSignal(false);
   const [changelogCursor, setChangelogCursor] = createSignal(0);
+  const [changelogLockedIndex, setChangelogLockedIndex] = createSignal(0);
+
+  // Confirm dialog state
+  const [showConfirm, setShowConfirm] = createSignal(false);
+  const [confirmCommit, setConfirmCommit] = createSignal<GitHubCommit | undefined>();
 
   // Update status state
   const [updateStatuses, setUpdateStatuses] = createSignal<Map<string, UpdateStatus>>(
@@ -218,16 +225,52 @@ function App() {
     setView("changelog");
 
     try {
-      const commits = await getChangelog(input);
-      setChangelogCommits(commits);
+      const result = await getChangelog(input);
+      setChangelogCommits(result.commits);
+      setChangelogLockedIndex(result.lockedIndex);
+      // Start cursor at the locked commit
+      setChangelogCursor(result.lockedIndex);
     } catch (err) {
       setChangelogCommits([]);
+      setChangelogLockedIndex(0);
       setStatusMessage(
         `Error loading changelog: ${err instanceof Error ? err.message : err}`
       );
     } finally {
       setChangelogLoading(false);
     }
+  }
+
+  // Lock to selected commit handler
+  async function handleLockToCommit() {
+    const input = changelogInput();
+    const commit = confirmCommit();
+    if (!input || !commit || !input.owner || !input.repo) return;
+
+    setShowConfirm(false);
+    setStatusMessage(`Locking ${input.name} to ${commit.shortSha}...`);
+
+    const result = await lockInputToRev(
+      input.name,
+      commit.sha,
+      input.owner,
+      input.repo,
+      flakePath
+    );
+
+    if (result.success) {
+      setStatusMessage(`Locked ${input.name} to ${commit.shortSha}`);
+      // Go back to list view and refresh
+      setView("list");
+      setChangelogCommits([]);
+      setChangelogInput(undefined);
+      setConfirmCommit(undefined);
+      await refresh();
+    } else {
+      setStatusMessage(`Error: ${result.output}`);
+    }
+
+    setTimeout(() => setStatusMessage(undefined), 3000);
   }
 
   // Keyboard handling
@@ -244,6 +287,21 @@ function App() {
     }
 
     if (currentView === "changelog") {
+      // Handle confirmation dialog keys first
+      if (showConfirm()) {
+        switch (e.name) {
+          case "y":
+            handleLockToCommit();
+            break;
+          case "n":
+          case "escape":
+            setShowConfirm(false);
+            setConfirmCommit(undefined);
+            break;
+        }
+        return;
+      }
+
       switch (e.name) {
         case "j":
         case "down":
@@ -252,6 +310,15 @@ function App() {
         case "k":
         case "up":
           moveChangelogCursor(-1);
+          break;
+        case "return":
+          // Show confirmation dialog to lock to selected commit
+          const commits = changelogCommits();
+          const selectedCommit = commits[changelogCursor()];
+          if (selectedCommit) {
+            setConfirmCommit(selectedCommit);
+            setShowConfirm(true);
+          }
           break;
         case "q":
         case "escape":
@@ -313,12 +380,20 @@ function App() {
         <Match when={view() === "changelog"}>
           <Show when={changelogInput()}>
             {(input: () => FlakeInput) => (
-              <Changelog
-                input={input()}
-                commits={changelogCommits()}
-                loading={changelogLoading()}
-                cursorIndex={changelogCursor()}
-              />
+              <>
+                <Changelog
+                  input={input()}
+                  commits={changelogCommits()}
+                  loading={changelogLoading()}
+                  cursorIndex={changelogCursor()}
+                  lockedIndex={changelogLockedIndex()}
+                />
+                <ConfirmDialog
+                  visible={showConfirm()}
+                  inputName={input().name}
+                  commit={confirmCommit()}
+                />
+              </>
             )}
           </Show>
         </Match>

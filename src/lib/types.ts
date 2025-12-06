@@ -32,6 +32,7 @@ export interface GitHubCommit {
   author: string;
   date: string;
   url: string;
+  isLocked?: boolean;
 }
 
 // Update status for flake inputs

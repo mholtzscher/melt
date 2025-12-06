@@ -94,14 +94,106 @@ export async function getCommitsSinceRev(
 }
 
 /**
- * Get changelog for a flake input (only works for GitHub inputs)
+ * Fetch commits starting from a specific revision (inclusive) and going back in history
+ * Returns the specified rev as first item, then older commits
  */
-export async function getChangelog(input: FlakeInput): Promise<GitHubCommit[]> {
+async function getCommitsFromRev(
+  owner: string,
+  repo: string,
+  fromRev: string,
+  limit: number = 50
+): Promise<GitHubCommit[]> {
+  const commits: GitHubCommit[] = [];
+  let page = 1;
+  const perPage = Math.min(limit, 100);
+
+  while (commits.length < limit && page <= 3) {
+    const url = `https://api.github.com/repos/${owner}/${repo}/commits?sha=${fromRev}&per_page=${perPage}&page=${page}`;
+
+    const response = await fetch(url, {
+      headers: getGitHubHeaders(),
+    });
+
+    if (!response.ok) {
+      if (response.status === 403) {
+        const remaining = response.headers.get("X-RateLimit-Remaining");
+        if (remaining === "0") {
+          throw new Error("GitHub API rate limit exceeded");
+        }
+      }
+      throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as GitHubAPICommit[];
+
+    if (data.length === 0) break;
+
+    for (const commit of data) {
+      if (commits.length >= limit) break;
+
+      const message = commit.commit.message.split("\n")[0];
+
+      commits.push({
+        sha: commit.sha,
+        shortSha: commit.sha.substring(0, 7),
+        message: message ?? "",
+        author: commit.commit.author.name,
+        date: formatCommitDate(commit.commit.author.date),
+        url: commit.html_url,
+      });
+    }
+
+    page++;
+  }
+
+  return commits;
+}
+
+/**
+ * Fetch commit history around a locked revision
+ * Returns commits ahead (newer), the locked commit, and commits behind (older)
+ * The locked commit is marked with isLocked: true
+ */
+export async function getCommitHistory(
+  owner: string,
+  repo: string,
+  lockedRev: string,
+  behindLimit: number = 50
+): Promise<{ commits: GitHubCommit[]; lockedIndex: number }> {
+  // Fetch commits ahead of the locked rev (newer commits)
+  const commitsAhead = await getCommitsSinceRev(owner, repo, lockedRev);
+
+  // Fetch commits from the locked rev and older
+  const commitsFromLocked = await getCommitsFromRev(owner, repo, lockedRev, behindLimit);
+
+  // Mark the first commit (the locked one) with isLocked flag
+  const lockedCommit = commitsFromLocked[0];
+  if (lockedCommit) {
+    lockedCommit.isLocked = true;
+  }
+
+  // Combine: ahead commits + locked commit + behind commits
+  // commitsAhead is already newest-first
+  // commitsFromLocked[0] is the locked commit, rest are older
+  const allCommits = [...commitsAhead, ...commitsFromLocked];
+
+  const lockedIndex = commitsAhead.length; // Index of the locked commit
+
+  return { commits: allCommits, lockedIndex };
+}
+
+/**
+ * Get changelog for a flake input (only works for GitHub inputs)
+ * Returns commits ahead, the locked commit, and commits behind
+ */
+export async function getChangelog(
+  input: FlakeInput
+): Promise<{ commits: GitHubCommit[]; lockedIndex: number }> {
   if (input.type !== "github" || !input.owner || !input.repo) {
     throw new Error("Changelog is only available for GitHub inputs");
   }
 
-  return getCommitsSinceRev(input.owner, input.repo, input.rev);
+  return getCommitHistory(input.owner, input.repo, input.rev);
 }
 
 /**

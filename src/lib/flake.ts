@@ -169,6 +169,29 @@ export async function updateAll(
 }
 
 /**
+ * Lock a specific input to a specific revision
+ */
+export async function lockInputToRev(
+  inputName: string,
+  rev: string,
+  owner: string,
+  repo: string,
+  path: string = "."
+): Promise<{ success: boolean; output: string }> {
+  try {
+    const overrideUrl = `github:${owner}/${repo}/${rev}`;
+    const result =
+      await $`nix flake update ${inputName} --override-input ${inputName} ${overrideUrl} --flake ${path} 2>&1`.text();
+    return { success: true, output: result };
+  } catch (error) {
+    return {
+      success: false,
+      output: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
  * Format a unix timestamp as relative time (e.g., "2 days ago")
  */
 export function formatRelativeTime(timestamp: number): string {

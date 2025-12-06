@@ -2,80 +2,61 @@
   description = "A TUI for managing Nix flake inputs";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
-    bun2nix = {
-      url = "github:nix-community/bun2nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
   };
 
   outputs =
+    { nixpkgs, ... }:
+    let
+      systems = [
+        "aarch64-linux"
+        "x86_64-linux"
+        "aarch64-darwin"
+        "x86_64-darwin"
+      ];
+      lib = nixpkgs.lib;
+      forEachSystem = lib.genAttrs systems;
+      pkgsFor = system: nixpkgs.legacyPackages.${system};
+
+      packageJson = builtins.fromJSON (builtins.readFile ./package.json);
+
+      defaultNodeModules = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+      hashesFile = "${./nix}/hashes.json";
+      hashesData =
+        if builtins.pathExists hashesFile then builtins.fromJSON (builtins.readFile hashesFile) else { };
+      nodeModulesHash = hashesData.nodeModules or defaultNodeModules;
+    in
     {
-      self,
-      nixpkgs,
-      flake-utils,
-      bun2nix,
-    }:
-    flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        b2n = bun2nix.packages.${system}.default;
-
-        melt = b2n.writeBunApplication {
-          pname = "melt";
-          version = "0.1.0";
-
-          src = ./.;
-
-          # Don't try to build/bundle - we run directly with bun
-          dontUseBunBuild = true;
-          dontUseBunCheck = true;
-
-          startScript = ''
-            bun run src/index.tsx "$@"
-          '';
-
-          runtimeInputs = [ pkgs.nix ];
-
-          bunDeps = b2n.fetchBunDeps {
-            bunNix = ./bun.nix;
+      packages = forEachSystem (
+        system:
+        let
+          pkgs = pkgsFor system;
+          mkNodeModules = pkgs.callPackage ./nix/node-modules.nix { hash = nodeModulesHash; };
+          mkPackage = pkgs.callPackage ./nix/melt.nix { };
+        in
+        {
+          default = mkPackage {
+            version = packageJson.version or "0.1.0";
+            src = ./.;
+            scripts = ./nix/scripts;
+            mkNodeModules = mkNodeModules;
           };
+        }
+      );
 
-          meta = with pkgs.lib; {
-            description = "A TUI for managing Nix flake inputs";
-            homepage = "https://github.com/your-username/melt";
-            license = licenses.mit;
-            platforms = platforms.unix;
-            mainProgram = "melt";
+      devShells = forEachSystem (
+        system:
+        let
+          pkgs = pkgsFor system;
+        in
+        {
+          default = pkgs.mkShell {
+            packages = with pkgs; [
+              bun
+              nix
+            ];
           };
-        };
-      in
-      {
-        packages = {
-          default = melt;
-          melt = melt;
-        };
-
-        apps = {
-          default = {
-            type = "app";
-            program = "${melt}/bin/melt";
-          };
-          melt = {
-            type = "app";
-            program = "${melt}/bin/melt";
-          };
-        };
-
-        devShells.default = pkgs.mkShell {
-          buildInputs = [
-            pkgs.bun
-            pkgs.nix
-            b2n
-          ];
-        };
-      }
-    );
+        }
+      );
+    };
 }

@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo } from "solid-js";
+import { For, Show, createEffect } from "solid-js";
 import type { GitHubCommit, FlakeInput } from "../lib/types";
 import { theme, mocha } from "../lib/theme";
 import type { ScrollBoxRenderable } from "@opentui/core";
@@ -37,17 +37,6 @@ export function Changelog(props: ChangelogProps) {
           Changelog: {props.input.name}
         </text>
         <text fg={theme.textDim}> ({props.input.url})</text>
-      </box>
-
-      {/* Subheader */}
-      <box
-        flexDirection="row"
-        paddingLeft={1}
-        paddingRight={1}
-        flexShrink={0}
-        height={1}
-      >
-        <text fg={theme.textDim}>Commit history</text>
       </box>
 
       {/* Loading state */}

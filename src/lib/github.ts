@@ -1,4 +1,5 @@
 import type { GitHubCommit, FlakeInput, UpdateStatus } from "./types";
+import { formatShortRelativeTime } from "./time";
 
 // Get GitHub token from environment for higher rate limits
 // Supports GITHUB_TOKEN, GH_TOKEN, and GITHUB_PAT
@@ -85,7 +86,7 @@ export async function getCommitsSinceRev(
         shortSha: commit.sha.substring(0, 7),
         message: message ?? "",
         author: commit.commit.author.name,
-        date: formatCommitDate(commit.commit.author.date),
+        date: formatShortRelativeTime(commit.commit.author.date),
         url: commit.html_url,
       });
     }
@@ -141,7 +142,7 @@ async function getCommitsFromRev(
         shortSha: commit.sha.substring(0, 7),
         message: message ?? "",
         author: commit.commit.author.name,
-        date: formatCommitDate(commit.commit.author.date),
+        date: formatShortRelativeTime(commit.commit.author.date),
         url: commit.html_url,
       });
     }
@@ -252,40 +253,4 @@ export function hasGitHubToken(): boolean {
   return !!GITHUB_TOKEN;
 }
 
-/**
- * Format a date string as relative time
- */
-function formatCommitDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
 
-  const minute = 60;
-  const hour = minute * 60;
-  const day = hour * 24;
-  const week = day * 7;
-  const month = day * 30;
-
-  if (diffSecs < minute) {
-    return "just now";
-  } else if (diffSecs < hour) {
-    const mins = Math.floor(diffSecs / minute);
-    return `${mins}m ago`;
-  } else if (diffSecs < day) {
-    const hours = Math.floor(diffSecs / hour);
-    return `${hours}h ago`;
-  } else if (diffSecs < week) {
-    const days = Math.floor(diffSecs / day);
-    return `${days}d ago`;
-  } else if (diffSecs < month) {
-    const weeks = Math.floor(diffSecs / week);
-    return `${weeks}w ago`;
-  } else {
-    // Format as date for older commits
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-  }
-}

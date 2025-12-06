@@ -192,39 +192,5 @@ export async function lockInputToRev(
   }
 }
 
-/**
- * Format a unix timestamp as relative time (e.g., "2 days ago")
- */
-export function formatRelativeTime(timestamp: number): string {
-  const now = Date.now() / 1000;
-  const diff = now - timestamp;
-
-  const minute = 60;
-  const hour = minute * 60;
-  const day = hour * 24;
-  const week = day * 7;
-  const month = day * 30;
-  const year = day * 365;
-
-  if (diff < minute) {
-    return "just now";
-  } else if (diff < hour) {
-    const mins = Math.floor(diff / minute);
-    return `${mins} ${mins === 1 ? "min" : "mins"} ago`;
-  } else if (diff < day) {
-    const hours = Math.floor(diff / hour);
-    return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
-  } else if (diff < week) {
-    const days = Math.floor(diff / day);
-    return `${days} ${days === 1 ? "day" : "days"} ago`;
-  } else if (diff < month) {
-    const weeks = Math.floor(diff / week);
-    return `${weeks} ${weeks === 1 ? "week" : "weeks"} ago`;
-  } else if (diff < year) {
-    const months = Math.floor(diff / month);
-    return `${months} ${months === 1 ? "month" : "months"} ago`;
-  } else {
-    const years = Math.floor(diff / year);
-    return `${years} ${years === 1 ? "year" : "years"} ago`;
-  }
-}
+// Re-export formatRelativeTime from shared time utilities
+export { formatRelativeTime } from "./time";

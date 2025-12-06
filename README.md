@@ -2,6 +2,10 @@
 
 A TUI for managing Nix flake inputs.
 
+![list view](./assets/list.png)
+
+![changelog view](./assets/changelog.png)
+
 ## Features
 
 - View all flake inputs with revision, type, and last modified time

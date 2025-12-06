@@ -1,0 +1,87 @@
+name: Update Dependencies
+
+on:
+  schedule:
+    # Run daily at 6am UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  update-bun:
+    name: Update Bun Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Update bun dependencies
+        run: bun update
+
+      - name: Regenerate bun.nix
+        run: nix run github:nix-community/bun2nix -- -o bun.nix
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet bun.lock bun.nix; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update bun dependencies"
+          title: "chore: update bun dependencies"
+          body: |
+            Automated bun dependency updates.
+
+            This PR was created by the daily dependency update workflow.
+          branch: deps/bun-update
+          delete-branch: true
+
+  update-nix:
+    name: Update Nix Flake Inputs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Update flake inputs
+        run: nix flake update
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet flake.lock; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update nix flake inputs"
+          title: "chore: update nix flake inputs"
+          body: |
+            Automated nix flake input updates.
+
+            This PR was created by the daily dependency update workflow.
+          branch: deps/nix-flake-update
+          delete-branch: true

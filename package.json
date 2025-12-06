@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "bun run --watch src/index.tsx",
-    "start": "bun run src/index.tsx"
+    "start": "bun run src/index.tsx",
+    "postinstall": "command -v bun2nix >/dev/null && bun2nix -o bun.nix || true"
   },
   "devDependencies": {
     "@types/bun": "^1.2.20"

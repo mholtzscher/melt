@@ -4,6 +4,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    bun2nix = {
+      url = "github:nix-community/bun2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -11,65 +15,38 @@
       self,
       nixpkgs,
       flake-utils,
+      bun2nix,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        b2n = bun2nix.packages.${system}.default;
 
-        melt = pkgs.stdenv.mkDerivation {
+        melt = b2n.writeBunApplication {
           pname = "melt";
           version = "0.1.0";
 
           src = ./.;
 
-          nativeBuildInputs = [
-            pkgs.bun
-            pkgs.makeWrapper
-          ];
+          # Don't try to build/bundle - we run directly with bun
+          dontUseBunBuild = true;
+          dontUseBunCheck = true;
 
-          # Skip configure phase
-          dontConfigure = true;
-
-          buildPhase = ''
-            runHook preBuild
-
-            # Set up bun cache in build directory
-            export HOME=$TMPDIR
-
-            # Install dependencies
-            bun install --frozen-lockfile
-
-            runHook postBuild
+          startScript = ''
+            bun run src/index.tsx "$@"
           '';
 
-          installPhase = ''
-            runHook preInstall
+          runtimeInputs = [ pkgs.nix ];
 
-            # Create output directories
-            mkdir -p $out/lib/melt
-            mkdir -p $out/bin
-
-            # Copy application files
-            cp -r src $out/lib/melt/
-            cp -r node_modules $out/lib/melt/
-            cp package.json $out/lib/melt/
-            cp bun.lock $out/lib/melt/
-            cp tsconfig.json $out/lib/melt/
-
-            # Create wrapper script
-            makeWrapper ${pkgs.bun}/bin/bun $out/bin/melt \
-              --add-flags "run $out/lib/melt/src/index.tsx" \
-              --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.nix ]}
-
-            runHook postInstall
-          '';
+          bunDeps = b2n.fetchBunDeps {
+            bunNix = ./bun.nix;
+          };
 
           meta = with pkgs.lib; {
             description = "A TUI for managing Nix flake inputs";
             homepage = "https://github.com/your-username/melt";
             license = licenses.mit;
-            maintainers = [ ];
             platforms = platforms.unix;
             mainProgram = "melt";
           };
@@ -96,6 +73,7 @@
           buildInputs = [
             pkgs.bun
             pkgs.nix
+            b2n
           ];
         };
       }

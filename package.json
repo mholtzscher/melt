@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "bun run --watch src/index.tsx",
     "start": "bun run src/index.tsx",
+    "build": "bun build src/index.tsx --outdir dist --target bun",
     "postinstall": "command -v bun2nix >/dev/null && bun2nix -o bun.nix || true"
   },
   "devDependencies": {

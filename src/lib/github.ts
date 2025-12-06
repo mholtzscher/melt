@@ -39,7 +39,8 @@ function getGitHubHeaders(): Record<string, string> {
 export async function getCommitsSinceRev(
   owner: string,
   repo: string,
-  sinceRev: string
+  sinceRev: string,
+  ref?: string
 ): Promise<GitHubCommit[]> {
   const commits: GitHubCommit[] = [];
   let page = 1;
@@ -48,7 +49,9 @@ export async function getCommitsSinceRev(
 
   while (!foundRev && page <= 5) {
     // Limit to 5 pages (500 commits max)
-    const url = `https://api.github.com/repos/${owner}/${repo}/commits?per_page=${perPage}&page=${page}`;
+    // Use sha param to specify branch/ref if provided
+    const shaParam = ref ? `&sha=${encodeURIComponent(ref)}` : "";
+    const url = `https://api.github.com/repos/${owner}/${repo}/commits?per_page=${perPage}&page=${page}${shaParam}`;
 
     const response = await fetch(url, {
       headers: getGitHubHeaders(),
@@ -158,10 +161,12 @@ export async function getCommitHistory(
   owner: string,
   repo: string,
   lockedRev: string,
+  ref?: string,
   behindLimit: number = 50
 ): Promise<{ commits: GitHubCommit[]; lockedIndex: number }> {
   // Fetch commits ahead of the locked rev (newer commits)
-  const commitsAhead = await getCommitsSinceRev(owner, repo, lockedRev);
+  // Use the ref (branch) if specified to get commits from the correct branch
+  const commitsAhead = await getCommitsSinceRev(owner, repo, lockedRev, ref);
 
   // Fetch commits from the locked rev and older
   const commitsFromLocked = await getCommitsFromRev(owner, repo, lockedRev, behindLimit);
@@ -193,7 +198,7 @@ export async function getChangelog(
     throw new Error("Changelog is only available for GitHub inputs");
   }
 
-  return getCommitHistory(input.owner, input.repo, input.rev);
+  return getCommitHistory(input.owner, input.repo, input.rev, input.ref);
 }
 
 /**
@@ -201,7 +206,7 @@ export async function getChangelog(
  */
 async function checkForUpdate(input: FlakeInput): Promise<UpdateStatus> {
   try {
-    const commits = await getCommitsSinceRev(input.owner!, input.repo!, input.rev);
+    const commits = await getCommitsSinceRev(input.owner!, input.repo!, input.rev, input.ref);
     return {
       hasUpdate: commits.length > 0,
       commitsBehind: commits.length,

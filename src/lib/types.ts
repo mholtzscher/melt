@@ -12,6 +12,7 @@ export interface FlakeInput {
   type: FlakeInputType;
   owner?: string;
   repo?: string;
+  ref?: string; // branch/tag reference (e.g., "nixos-unstable")
   url: string;
   rev: string;
   shortRev: string;
@@ -80,6 +81,7 @@ export interface NixFlakeMetadataResponse {
           type: string;
           owner?: string;
           repo?: string;
+          ref?: string;
           url?: string;
           path?: string;
         };

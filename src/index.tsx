@@ -344,10 +344,11 @@ function App() {
         toggleSelection();
         break;
       case "u":
-        handleUpdateSelected();
-        break;
-      case "U":
-        handleUpdateAll();
+        if (e.shift) {
+          handleUpdateAll();
+        } else {
+          handleUpdateSelected();
+        }
         break;
       case "c":
         showChangelog();

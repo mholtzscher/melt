@@ -117,6 +117,7 @@ export async function getFlakeMetadata(
       type: getInputType(locked, original),
       owner: locked.owner || original?.owner,
       repo: locked.repo || original?.repo,
+      ref: original?.ref, // branch/tag reference (e.g., "nixos-unstable")
       url: getInputUrl(locked, original),
       rev: locked.rev || "",
       shortRev: locked.rev?.substring(0, 7) || "",

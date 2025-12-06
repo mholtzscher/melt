@@ -170,7 +170,8 @@ export async function getCommitHistory(
   const commitsAhead = await getCommitsSinceRev(owner, repo, lockedRev, ref);
 
   // Fetch commits from the locked rev and older
-  const commitsFromLocked = await getCommitsFromRev(owner, repo, lockedRev, behindLimit);
+  // Add 1 to include the locked commit itself, so we get `behindLimit` older commits
+  const commitsFromLocked = await getCommitsFromRev(owner, repo, lockedRev, behindLimit + 1);
 
   // Mark the first commit (the locked one) with isLocked flag
   const lockedCommit = commitsFromLocked[0];

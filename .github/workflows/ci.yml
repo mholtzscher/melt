@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   typecheck:
@@ -33,11 +32,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: DeterminateSystems/nix-installer-action@main
-
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: cachix/install-nix-action@v31
         with:
-          use-gha-cache: false
+          extra_nix_config: |
+            sandbox = false
 
       - name: Build package
         run: nix build

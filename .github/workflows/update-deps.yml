@@ -9,13 +9,10 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
 
 jobs:
   update-bun:
-    permissions:
-      contents: read
-      id-token: write
-
     name: Update Bun Dependencies
     runs-on: ubuntu-latest
     steps:
@@ -59,10 +56,6 @@ jobs:
           delete-branch: true
 
   update-nix:
-    permissions:
-      contents: read
-      id-token: write
-
     name: Update Nix Flake Inputs
     runs-on: ubuntu-latest
     steps:

@@ -141,12 +141,12 @@ export function Changelog(props: ChangelogProps) {
 
         <box flexGrow={1} />
 
-        <text fg={theme.textMuted}>
-          {props.lockedIndex} ahead
+        <text fg={mocha.green}>
+          +{props.lockedIndex} new
         </text>
         <text fg={mocha.yellow}> {"\u{1F512}"} </text>
         <text fg={theme.textMuted}>
-          {props.commits.length - props.lockedIndex - 1} behind
+          {props.commits.length - props.lockedIndex - 1} older
         </text>
       </box>
     </box>

@@ -68,7 +68,7 @@ function AppContent() {
 
     // Error view keys
     if (currentView === "error") {
-      if (e.name === "q" || e.name === "escape") {
+      if (e.name === "escape") {
         process.exit(1);
       }
       return;
@@ -102,7 +102,6 @@ function AppContent() {
         case "return":
           changelogActions.showConfirmDialog();
           break;
-        case "q":
         case "escape":
           appActions.setView("list");
           changelogActions.close();
@@ -137,10 +136,13 @@ function AppContent() {
       case "r":
         appActions.refresh();
         break;
-      case "q":
-        process.exit(0);
       case "escape":
-        appActions.clearSelection();
+        // If selection exists, clear it; otherwise quit
+        if (appState.selectedIndices.size > 0) {
+          appActions.clearSelection();
+        } else {
+          process.exit(0);
+        }
         break;
     }
   });

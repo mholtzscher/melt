@@ -130,18 +130,14 @@ export function Changelog(props: ChangelogProps) {
         flexShrink={0}
         height={1}
       >
-        <text fg={mocha.lavender}>j</text>
-        <text fg={theme.textDim}>/</text>
-        <text fg={mocha.lavender}>k</text>
-        <text fg={theme.textDim}>:scroll </text>
+        <text fg={mocha.lavender}>j/k</text>
+        <text fg={theme.textDim}> nav  </text>
 
-        <text fg={mocha.lavender}>Enter</text>
-        <text fg={theme.textDim}>:lock </text>
+        <text fg={mocha.lavender}>enter</text>
+        <text fg={theme.textDim}> lock  </text>
 
-        <text fg={mocha.lavender}>q</text>
-        <text fg={theme.textDim}>/</text>
-        <text fg={mocha.lavender}>Esc</text>
-        <text fg={theme.textDim}>:back</text>
+        <text fg={mocha.lavender}>esc</text>
+        <text fg={theme.textDim}> back</text>
 
         <box flexGrow={1} />
 

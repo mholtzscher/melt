@@ -20,28 +20,26 @@ export function StatusBar(props: StatusBarProps) {
         when={props.statusMessage}
         fallback={
           <box flexDirection="row" flexGrow={1}>
-            <text fg={mocha.lavender}>j</text>
-            <text fg={theme.textDim}>/</text>
-            <text fg={mocha.lavender}>k</text>
-            <text fg={theme.textDim}>:nav </text>
+            <text fg={mocha.lavender}>j/k</text>
+            <text fg={theme.textDim}> nav  </text>
 
             <text fg={mocha.lavender}>space</text>
-            <text fg={theme.textDim}>:select </text>
+            <text fg={theme.textDim}> select  </text>
 
             <text fg={mocha.lavender}>u</text>
-            <text fg={theme.textDim}>:update </text>
+            <text fg={theme.textDim}> update  </text>
 
             <text fg={mocha.lavender}>U</text>
-            <text fg={theme.textDim}>:all </text>
+            <text fg={theme.textDim}> all  </text>
 
             <text fg={mocha.lavender}>c</text>
-            <text fg={theme.textDim}>:log </text>
+            <text fg={theme.textDim}> changelog  </text>
 
             <text fg={mocha.lavender}>r</text>
-            <text fg={theme.textDim}>:refresh </text>
+            <text fg={theme.textDim}> refresh  </text>
 
-            <text fg={mocha.lavender}>q</text>
-            <text fg={theme.textDim}>:quit</text>
+            <text fg={mocha.lavender}>esc</text>
+            <text fg={theme.textDim}> quit</text>
           </box>
         }
       >

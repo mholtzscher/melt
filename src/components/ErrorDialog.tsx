@@ -33,7 +33,7 @@ export function ErrorDialog(props: ErrorDialogProps) {
         {/* Instructions */}
         <box marginTop={2} flexDirection="row">
           <text fg={theme.textDim}>Press </text>
-          <text fg={mocha.lavender}>q</text>
+          <text fg={mocha.lavender}>esc</text>
           <text fg={theme.textDim}> to quit</text>
         </box>
       </box>

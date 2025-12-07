@@ -104,7 +104,7 @@ function AppContent() {
 				case "up":
 					changelogActions.moveCursor(-1);
 					break;
-				case "return":
+				case "space":
 					changelogActions.showConfirmDialog();
 					break;
 				case "escape":

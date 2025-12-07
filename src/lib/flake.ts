@@ -1,5 +1,5 @@
-import { $ } from "bun";
 import { dirname, resolve } from "node:path";
+import { $ } from "bun";
 import type {
 	FlakeInput,
 	FlakeInputType,

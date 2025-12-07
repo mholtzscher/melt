@@ -1,5 +1,5 @@
 {
-  description = "Bun2Nix minimal sample";
+  description = "A TUI for managing Nix flake inputs";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";

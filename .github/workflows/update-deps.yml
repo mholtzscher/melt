@@ -26,13 +26,13 @@ jobs:
       - name: Update bun dependencies
         run: bun update
 
-      - name: Update nix hashes
-        run: ./nix/scripts/update-hashes.sh
+      - name: Update bun.nix
+        run: bunx bun2nix -o bun.nix
 
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet bun.lock nix/hashes.json; then
+          if git diff --quiet bun.lock bun.nix; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -48,7 +48,7 @@ jobs:
           body: |
             Automated bun dependency updates.
 
-            Updates `bun.lock` and `nix/hashes.json`.
+            Updates `bun.lock` and `bun.nix`.
 
             This PR was created by the daily dependency update workflow.
           branch: deps/bun-update

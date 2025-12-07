@@ -10,7 +10,8 @@
 		"dev": "bun run --watch src/index.tsx",
 		"start": "bun run src/index.tsx",
 		"build": "bun run ./bundle.ts",
-		"lint": "biome check .",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check . && bun run typecheck",
 		"lint:fix": "biome check --write .",
 		"format": "biome format --write .",
 		"postinstall": "bun2nix -o bun.nix"
@@ -18,6 +19,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.8",
 		"@tsconfig/bun": "^1.0.10",
+		"@types/babel__core": "^7.20.5",
 		"@types/bun": "^1.3.3",
 		"bun2nix": "^2.0.0"
 	},

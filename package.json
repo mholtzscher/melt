@@ -27,6 +27,7 @@
 		"@opentui/core": "^0.1.57",
 		"@opentui/solid": "^0.1.57",
 		"babel-preset-solid": "^1.9.10",
+		"opentui-spinner": "^0.0.6",
 		"solid-js": "^1.9.10"
 	}
 }

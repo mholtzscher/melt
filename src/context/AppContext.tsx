@@ -88,8 +88,15 @@ export function AppProvider(props: { children: JSX.Element }) {
 		setState("statusMessage", `Checking for updates...${tokenMsg}`);
 
 		try {
-			const statuses = await checkForUpdates(toCheck);
-			setState("updateStatuses", statuses);
+			await checkForUpdates(toCheck, (name, status) => {
+				setState(
+					produce((s) => {
+						const newMap = new Map(s.updateStatuses);
+						newMap.set(name, status);
+						s.updateStatuses = newMap;
+					}),
+				);
+			});
 			setState("statusMessage", undefined);
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);

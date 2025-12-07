@@ -1,6 +1,9 @@
 import { formatShortRelativeTime } from "./time";
 import type { FlakeInput, GitHubCommit, UpdateStatus } from "./types";
 
+const API_DELAY_MS = Number(process.env.MELT_API_DELAY_MS) || 0;
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Get GitHub token from environment for higher rate limits
 // Supports GITHUB_TOKEN, GH_TOKEN, and GITHUB_PAT
 const GITHUB_TOKEN =
@@ -54,6 +57,8 @@ export async function getCommitsSinceRev(
 		// Use sha param to specify branch/ref if provided
 		const shaParam = ref ? `&sha=${encodeURIComponent(ref)}` : "";
 		const url = `https://api.github.com/repos/${owner}/${repo}/commits?per_page=${perPage}&page=${page}${shaParam}`;
+
+		if (API_DELAY_MS > 0) await delay(API_DELAY_MS);
 
 		const response = await fetch(url, {
 			headers: getGitHubHeaders(),
@@ -116,6 +121,8 @@ async function getCommitsFromRev(
 
 	while (commits.length < limit && page <= 3) {
 		const url = `https://api.github.com/repos/${owner}/${repo}/commits?sha=${fromRev}&per_page=${perPage}&page=${page}`;
+
+		if (API_DELAY_MS > 0) await delay(API_DELAY_MS);
 
 		const response = await fetch(url, {
 			headers: getGitHubHeaders(),
@@ -254,6 +261,7 @@ async function checkForUpdate(input: FlakeInput): Promise<UpdateStatus> {
  */
 export async function checkForUpdates(
 	inputs: FlakeInput[],
+	onStatusChange?: (name: string, status: UpdateStatus) => void,
 ): Promise<Map<string, UpdateStatus>> {
 	const results = new Map<string, UpdateStatus>();
 
@@ -262,9 +270,20 @@ export async function checkForUpdates(
 		(input) => input.type === "github" && input.owner && input.repo,
 	);
 
+	for (const input of githubInputs) {
+		const loadingStatus: UpdateStatus = {
+			hasUpdate: false,
+			commitsBehind: 0,
+			loading: true,
+		};
+		results.set(input.name, loadingStatus);
+		onStatusChange?.(input.name, loadingStatus);
+	}
+
 	const checks = githubInputs.map(async (input) => {
 		const status = await checkForUpdate(input);
 		results.set(input.name, status);
+		onStatusChange?.(input.name, status);
 	});
 
 	await Promise.all(checks);

@@ -1,5 +1,6 @@
 import { render, useKeyboard, useRenderer } from "@opentui/solid";
 import { type Accessor, Match, Show, Switch } from "solid-js";
+import "opentui-spinner/solid";
 import { Changelog } from "./components/Changelog";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ErrorDialog } from "./components/ErrorDialog";

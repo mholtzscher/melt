@@ -103,7 +103,7 @@ export function FlakeList(props: FlakeListProps) {
 								const status = props.updateStatuses.get(input.name);
 								if (!status) return <text fg={theme.textDim}>-</text>;
 								if (status.loading) {
-									return <text fg={theme.textDim}>...</text>;
+									return <spinner name="dots" color={theme.textDim} />;
 								}
 								if (status.error) {
 									return <text fg={mocha.yellow}>?</text>;

@@ -4,6 +4,7 @@ import {
 	getFlakeMetadata,
 	hasFlakeNix,
 	lockInputToRev,
+	resolveFlakePath,
 	updateAll,
 	updateInputs,
 } from "../lib/flake";
@@ -11,7 +12,7 @@ import { checkForUpdates, hasGitHubToken } from "../lib/github";
 import type { AppView, FlakeInput, UpdateStatus } from "../lib/types";
 
 // Get the flake path from command line args or use current working directory
-const flakePath = process.argv[2] || process.cwd();
+const flakePath = resolveFlakePath(process.argv[2] || process.cwd());
 
 export interface AppState {
 	// View state

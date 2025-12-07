@@ -1,4 +1,5 @@
 import { $ } from "bun";
+import { dirname, resolve } from "node:path";
 import type {
 	FlakeInput,
 	FlakeInputType,
@@ -7,7 +8,18 @@ import type {
 } from "./types";
 
 /**
- * Check if a flake.nix exists in the current directory
+ * Resolve a path argument to a flake directory
+ */
+export function resolveFlakePath(path: string): string {
+	const resolved = resolve(path);
+	if (resolved.endsWith("flake.nix")) {
+		return dirname(resolved);
+	}
+	return resolved;
+}
+
+/**
+ * Check if a flake.nix exists in the given path
  */
 export async function hasFlakeNix(path: string = "."): Promise<boolean> {
 	const file = Bun.file(`${path}/flake.nix`);

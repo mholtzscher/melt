@@ -4,10 +4,11 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     systems.url = "github:nix-systems/default";
-
-    bun2nix.url = "github:nix-community/bun2nix?tag=2.0.5";
-    bun2nix.inputs.nixpkgs.follows = "nixpkgs";
-    bun2nix.inputs.systems.follows = "systems";
+    bun2nix = {
+      url = "github:nix-community/bun2nix?tag=2.0.5";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.systems.follows = "systems";
+    };
   };
 
   # Use the cached version of bun2nix from the nix-community cli

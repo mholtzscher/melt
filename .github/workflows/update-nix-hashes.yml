@@ -54,6 +54,19 @@ jobs:
           nix/scripts/update-hashes.sh
           echo "✅ node_modules hash updated successfully"
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Format code
+        run: |
+          set -euo pipefail
+          echo "🎨 Formatting code..."
+          bun install --frozen-lockfile
+          bun run format
+          echo "✅ Code formatted successfully"
+
       - name: Commit hash changes
         env:
           TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}

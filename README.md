@@ -19,14 +19,14 @@ A TUI for managing Nix flake inputs.
 ### With Nix (recommended)
 
 ```bash
-nix run github:your-username/melt
+nix run github:mholtzscher/melt
 ```
 
 Or add to your flake:
 
 ```nix
 {
-  inputs.melt.url = "github:your-username/melt";
+  inputs.melt.url = "github:mholtzscher/melt";
 }
 ```
 
@@ -35,7 +35,7 @@ Or add to your flake:
 Requires [Bun](https://bun.sh):
 
 ```bash
-git clone https://github.com/your-username/melt
+git clone https://github.com/mholtzscher/melt
 cd melt
 bun install
 bun run start
@@ -53,23 +53,23 @@ melt /path/to/flake
 
 ## Keybindings
 
-| Key | Action |
-|-----|--------|
-| `j/k` | Navigate up/down |
-| `space` | Select input |
-| `u` | Update selected inputs |
-| `U` | Update all inputs |
-| `c` | View changelog (GitHub only) |
-| `r` | Refresh |
-| `esc` | Back / Clear selection / Quit |
+| Key     | Action                        |
+| ------- | ----------------------------- |
+| `j/k`   | Navigate up/down              |
+| `space` | Select input                  |
+| `u`     | Update selected inputs        |
+| `U`     | Update all inputs             |
+| `c`     | View changelog (GitHub only)  |
+| `r`     | Refresh                       |
+| `esc`   | Back / Clear selection / Quit |
 
 ### Changelog view
 
-| Key | Action |
-|-----|--------|
-| `j/k` | Navigate commits |
+| Key     | Action                  |
+| ------- | ----------------------- |
+| `j/k`   | Navigate commits        |
 | `enter` | Lock to selected commit |
-| `esc` | Back to list |
+| `esc`   | Back to list            |
 
 ## GitHub API
 

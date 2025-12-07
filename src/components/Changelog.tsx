@@ -136,7 +136,7 @@ export function Changelog(props: ChangelogProps) {
         <text fg={mocha.lavender}>enter</text>
         <text fg={theme.textDim}> lock  </text>
 
-        <text fg={mocha.lavender}>esc</text>
+        <text fg={mocha.lavender}>q/esc</text>
         <text fg={theme.textDim}> back</text>
 
         <box flexGrow={1} />

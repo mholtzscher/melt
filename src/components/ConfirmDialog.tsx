@@ -48,7 +48,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
           <box height={1} marginTop={1} flexDirection="row" justifyContent="center">
             <text fg={mocha.green}>[y]</text>
             <text fg={theme.textDim}> confirm  </text>
-            <text fg={mocha.red}>[n]</text>
+            <text fg={mocha.red}>[n/q]</text>
             <text fg={theme.textDim}> cancel</text>
           </box>
         </box>

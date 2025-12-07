@@ -68,7 +68,7 @@ melt /path/to/flake
 | Key     | Action                  |
 | ------- | ----------------------- |
 | `j/k`   | Navigate commits        |
-| `enter` | Lock to selected commit |
+| `space` | Lock to selected commit |
 | `esc`   | Back to list            |
 
 ## GitHub API

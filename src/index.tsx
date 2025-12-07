@@ -1,4 +1,4 @@
-import { render, useKeyboard } from "@opentui/solid";
+import { render, useKeyboard, useRenderer } from "@opentui/solid";
 import { type Accessor, Match, Show, Switch } from "solid-js";
 import { Changelog } from "./components/Changelog";
 import { ConfirmDialog } from "./components/ConfirmDialog";
@@ -13,6 +13,12 @@ import type { FlakeInput } from "./lib/types";
 function AppContent() {
 	const [appState, appActions] = useApp();
 	const [changelogState, changelogActions] = useChangelog();
+	const renderer = useRenderer();
+
+	function quit(code = 0) {
+		renderer.destroy();
+		process.exit(code);
+	}
 
 	// Show changelog for current input
 	async function showChangelog() {
@@ -66,7 +72,7 @@ function AppContent() {
 		// Error view keys
 		if (currentView === "error") {
 			if (e.name === "escape" || e.name === "q") {
-				process.exit(1);
+				quit(1);
 			}
 			return;
 		}
@@ -141,7 +147,7 @@ function AppContent() {
 				if (appState.selectedIndices.size > 0) {
 					appActions.clearSelection();
 				} else {
-					process.exit(0);
+					quit(0);
 				}
 				break;
 		}

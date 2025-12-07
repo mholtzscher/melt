@@ -385,6 +385,10 @@
     url = "https://registry.npmjs.org/@tokenizer/token/-/token-0.3.0.tgz";
     hash = "sha512-OvjF+z51L3ov0OyAU0duzsYuvO01PH7x4t6DJx+guahgTnBHkhJdG7soQeTSFLWN3efnHyibZ4Z8l2EuWwJN3A==";
   };
+  "@tsconfig/bun@1.0.10" = fetchurl {
+    url = "https://registry.npmjs.org/@tsconfig/bun/-/bun-1.0.10.tgz";
+    hash = "sha512-5AV5YknQjNyoYzZ/8NG0dawqew/wH+x7ANiCfCIn29qo0cdbd1EryvFD1k5NSZWLBMOI/fGqMIaxi58GPIP9Cg==";
+  };
   "@types/bun@1.3.3" = fetchurl {
     url = "https://registry.npmjs.org/@types/bun/-/bun-1.3.3.tgz";
     hash = "sha512-ogrKbJ2X5N0kWLLFKeytG0eHDleBYtngtlbu9cyBKFtNL3cnpDZkNdQj8flVf6WTZUX5ulI9AY1oa7ljhSrp+g==";

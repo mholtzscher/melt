@@ -3,7 +3,9 @@
 ## Commands
 - `bun dev` - Run with hot reload
 - `bun start` - Run the application
-- No test/lint commands configured
+- `bun run lint` - Run biome check
+- `bun run typecheck` - Run typescript check
+- `bun run format` - Format code with biome
 
 ## Code Style
 

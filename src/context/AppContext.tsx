@@ -1,14 +1,7 @@
 import { createContext, type JSX, onMount, useContext } from "solid-js";
 import { createStore, produce } from "solid-js/store";
-import {
-	getFlakeMetadata,
-	hasFlakeNix,
-	lockInputToRev,
-	resolveFlakePath,
-	updateAll,
-	updateInputs,
-} from "../lib/flake";
-import { checkForUpdates, hasGitHubToken } from "../lib/github";
+import { createFlakeLogic } from "../hooks/createFlakeLogic";
+import { getFlakeMetadata, hasFlakeNix, resolveFlakePath } from "../lib/flake";
 import type { AppView, FlakeInput, UpdateStatus } from "../lib/types";
 
 // Get the flake path from command line args or use current working directory
@@ -74,43 +67,7 @@ export function AppProvider(props: { children: JSX.Element }) {
 		updateStatuses: new Map(),
 	});
 
-	// Guard to prevent concurrent update checks
-	let isCheckingUpdates = false;
-
-	// Check for updates on all inputs
-	async function checkUpdates(inputsList?: FlakeInput[]) {
-		if (isCheckingUpdates) return;
-		isCheckingUpdates = true;
-
-		const toCheck = inputsList || state.inputs;
-		const tokenMsg = hasGitHubToken()
-			? ""
-			: " (set GITHUB_TOKEN for higher rate limits)";
-		setState("statusMessage", `Checking for updates...${tokenMsg}`);
-
-		try {
-			await checkForUpdates(toCheck, (name, status) => {
-				setState(
-					produce((s) => {
-						const newMap = new Map(s.updateStatuses);
-						newMap.set(name, status);
-						s.updateStatuses = newMap;
-					}),
-				);
-			});
-			setState("statusMessage", undefined);
-		} catch (err) {
-			const errorMsg = err instanceof Error ? err.message : String(err);
-			if (errorMsg.includes("rate limit")) {
-				setState("statusMessage", `${errorMsg} - set GITHUB_TOKEN env var`);
-			} else {
-				setState("statusMessage", `Error checking updates: ${errorMsg}`);
-			}
-			setTimeout(() => setState("statusMessage", undefined), 5000);
-		} finally {
-			isCheckingUpdates = false;
-		}
-	}
+	const flakeLogic = createFlakeLogic(state, setState, flakePath);
 
 	// Load flake data on mount
 	onMount(async () => {
@@ -129,7 +86,7 @@ export function AppProvider(props: { children: JSX.Element }) {
 			setState("loading", false);
 
 			// Check for updates in background
-			checkUpdates(metadata.inputs);
+			flakeLogic.checkUpdates(metadata.inputs);
 		} catch (err) {
 			setState("error", err instanceof Error ? err.message : String(err));
 			setState("view", "error");
@@ -180,103 +137,10 @@ export function AppProvider(props: { children: JSX.Element }) {
 			setState("statusMessage", message);
 		},
 
-		async refresh() {
-			setState("statusMessage", "Refreshing...");
-			try {
-				const metadata = await getFlakeMetadata(flakePath);
-				setState("inputs", metadata.inputs);
-				setState("description", metadata.description);
-
-				// Re-check for updates after refresh
-				await checkUpdates(metadata.inputs);
-			} catch (err) {
-				setState(
-					"statusMessage",
-					`Error: ${err instanceof Error ? err.message : err}`,
-				);
-				setTimeout(() => setState("statusMessage", undefined), 3000);
-			}
-		},
-
-		async updateSelected() {
-			const selected = state.selectedIndices;
-			if (selected.size === 0) {
-				setState("statusMessage", "No inputs selected");
-				setTimeout(() => setState("statusMessage", undefined), 2000);
-				return;
-			}
-
-			const names = Array.from(selected)
-				.map((i) => state.inputs[i]?.name)
-				.filter((n): n is string => !!n);
-			setState("statusMessage", `Updating ${names.join(", ")}...`);
-			setState("loading", true);
-
-			const result = await updateInputs(names, flakePath);
-			setState("loading", false);
-
-			if (result.success) {
-				setState("selectedIndices", new Set<number>());
-				await actions.refresh();
-				setState("statusMessage", `Updated ${names.length} input(s)`);
-			} else {
-				setState("statusMessage", `Error: ${result.output}`);
-			}
-
-			setTimeout(() => setState("statusMessage", undefined), 3000);
-		},
-
-		async updateAll() {
-			setState("statusMessage", "Updating all inputs...");
-			setState("loading", true);
-
-			const result = await updateAll(flakePath);
-			setState("loading", false);
-
-			if (result.success) {
-				setState("selectedIndices", new Set<number>());
-				await actions.refresh();
-				setState("statusMessage", "All inputs updated");
-			} else {
-				setState("statusMessage", `Error: ${result.output}`);
-			}
-
-			setTimeout(() => setState("statusMessage", undefined), 3000);
-		},
-
-		async lockToCommit(
-			inputName: string,
-			sha: string,
-			owner: string,
-			repo: string,
-		): Promise<boolean> {
-			setState(
-				"statusMessage",
-				`Locking ${inputName} to ${sha.substring(0, 7)}...`,
-			);
-
-			const result = await lockInputToRev(
-				inputName,
-				sha,
-				owner,
-				repo,
-				flakePath,
-			);
-
-			if (result.success) {
-				setState(
-					"statusMessage",
-					`Locked ${inputName} to ${sha.substring(0, 7)}`,
-				);
-				await actions.refresh();
-				setTimeout(() => setState("statusMessage", undefined), 3000);
-				return true;
-			} else {
-				setState("statusMessage", `Error: ${result.output}`);
-				setTimeout(() => setState("statusMessage", undefined), 3000);
-				return false;
-			}
-		},
+		refresh: flakeLogic.refresh,
+		updateSelected: flakeLogic.updateSelected,
+		updateAll: flakeLogic.updateAll,
+		lockToCommit: flakeLogic.lockToCommit,
 
 		getCurrentInput() {
 			return state.inputs[state.cursorIndex];

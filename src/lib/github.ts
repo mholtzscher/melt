@@ -280,13 +280,20 @@ export async function checkForUpdates(
 		onStatusChange?.(input.name, loadingStatus);
 	}
 
-	const checks = githubInputs.map(async (input) => {
-		const status = await checkForUpdate(input);
-		results.set(input.name, status);
-		onStatusChange?.(input.name, status);
-	});
+	// Batch to avoid rate limits (Unauth: 60/hr, Auth: 5000/hr)
+	const BATCH_SIZE = hasGitHubToken() ? 10 : 2;
 
-	await Promise.all(checks);
+	for (let i = 0; i < githubInputs.length; i += BATCH_SIZE) {
+		const batch = githubInputs.slice(i, i + BATCH_SIZE);
+		await Promise.all(
+			batch.map(async (input) => {
+				const status = await checkForUpdate(input);
+				results.set(input.name, status);
+				onStatusChange?.(input.name, status);
+			}),
+		);
+	}
+
 	return results;
 }
 

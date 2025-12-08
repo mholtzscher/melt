@@ -1,17 +1,17 @@
 import { createContext, type JSX, onMount, useContext } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import { createFlakeLogic } from "../hooks/createFlakeLogic";
-import { getFlakeMetadata, hasFlakeNix, resolveFlakePath } from "../lib/flake";
-import type { AppView, FlakeInput, UpdateStatus } from "../lib/types";
-
-// Get the flake path from command line args or use current working directory
-const flakePath = resolveFlakePath(process.argv[2] || process.cwd());
+import type {
+	AppView,
+	FlakeInput,
+	FlakeMetadata,
+	UpdateStatus,
+} from "../lib/types";
 
 export interface AppState {
 	// View state
 	view: AppView;
 	loading: boolean;
-	error?: string;
 	statusMessage?: string;
 
 	// Flake data
@@ -34,7 +34,6 @@ export interface AppActions {
 
 	// View management
 	setView: (view: AppView) => void;
-	setError: (error: string) => void;
 	setStatusMessage: (message: string | undefined) => void;
 
 	// Data operations
@@ -57,41 +56,27 @@ type AppContextValue = [AppState, AppActions];
 
 const AppContext = createContext<AppContextValue>();
 
-export function AppProvider(props: { children: JSX.Element }) {
+export interface AppProviderProps {
+	flake: FlakeMetadata;
+	children: JSX.Element;
+}
+
+export function AppProvider(props: AppProviderProps) {
 	const [state, setState] = createStore<AppState>({
 		view: "list",
-		loading: true,
-		inputs: [],
+		loading: false,
+		inputs: props.flake.inputs,
+		description: props.flake.description,
 		cursorIndex: 0,
 		selectedIndices: new Set(),
 		updateStatuses: new Map(),
 	});
 
-	const flakeLogic = createFlakeLogic(state, setState, flakePath);
+	const flakeLogic = createFlakeLogic(state, setState, props.flake.path);
 
-	// Load flake data on mount
-	onMount(async () => {
-		try {
-			const hasFlake = await hasFlakeNix(flakePath);
-			if (!hasFlake) {
-				setState("error", `No flake.nix found in ${flakePath}`);
-				setState("view", "error");
-				setState("loading", false);
-				return;
-			}
-
-			const metadata = await getFlakeMetadata(flakePath);
-			setState("inputs", metadata.inputs);
-			setState("description", metadata.description);
-			setState("loading", false);
-
-			// Check for updates in background
-			flakeLogic.checkUpdates(metadata.inputs);
-		} catch (err) {
-			setState("error", err instanceof Error ? err.message : String(err));
-			setState("view", "error");
-			setState("loading", false);
-		}
+	// Check for updates in background on mount
+	onMount(() => {
+		flakeLogic.checkUpdates(props.flake.inputs);
 	});
 
 	const actions: AppActions = {
@@ -129,10 +114,6 @@ export function AppProvider(props: { children: JSX.Element }) {
 			setState("view", view);
 		},
 
-		setError(error: string) {
-			setState("error", error);
-		},
-
 		setStatusMessage(message: string | undefined) {
 			setState("statusMessage", message);
 		},
@@ -147,7 +128,7 @@ export function AppProvider(props: { children: JSX.Element }) {
 		},
 
 		getFlakePath() {
-			return flakePath;
+			return props.flake.path;
 		},
 	};
 

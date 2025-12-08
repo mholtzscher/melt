@@ -45,7 +45,7 @@ export interface UpdateStatus {
 }
 
 // App state types
-export type AppView = "list" | "changelog" | "error" | "updating";
+export type AppView = "list" | "changelog" | "updating";
 
 // Utility type for nix flake metadata JSON response
 export interface NixFlakeMetadataResponse {

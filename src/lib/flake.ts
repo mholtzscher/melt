@@ -103,7 +103,7 @@ export async function getFlakeMetadata(
 		return {
 			description: data.description,
 			inputs: [],
-			path: data.path,
+			path,
 		};
 	}
 
@@ -139,7 +139,7 @@ export async function getFlakeMetadata(
 	return {
 		description: data.description,
 		inputs,
-		path: data.path,
+		path,
 	};
 }
 

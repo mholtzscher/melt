@@ -129,6 +129,22 @@ function parseInputs(data: NixFlakeMetadataResponse): FlakeInput[] {
 }
 
 /**
+ * Fetch and parse flake metadata from a path
+ */
+async function fetchMetadata(
+	path: string,
+): Promise<Result<NixFlakeMetadataResponse>> {
+	try {
+		const result =
+			await $`nix flake metadata --json ${path} 2>/dev/null`.text();
+		return { ok: true, data: JSON.parse(result) };
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		return { ok: false, error: msg };
+	}
+}
+
+/**
  * Flake metadata with methods for updates and refresh
  */
 export class FlakeMetadata {
@@ -157,37 +173,39 @@ export class FlakeMetadata {
 			return { ok: false, error: `No flake.nix found in ${flakePath}` };
 		}
 
-		try {
-			const result =
-				await $`nix flake metadata --json ${flakePath} 2>/dev/null`.text();
-			const data: NixFlakeMetadataResponse = JSON.parse(result);
-			const flake = new FlakeMetadata(
-				flakePath,
-				data.description,
-				parseInputs(data),
-			);
-			return { ok: true, data: flake };
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err);
-			return { ok: false, error: `Failed to load flake metadata: ${msg}` };
+		const result = await fetchMetadata(flakePath);
+		if (!result.ok) {
+			return {
+				ok: false,
+				error: `Failed to load flake metadata: ${result.error}`,
+			};
 		}
+
+		return {
+			ok: true,
+			data: new FlakeMetadata(
+				flakePath,
+				result.data.description,
+				parseInputs(result.data),
+			),
+		};
 	}
 
 	/**
 	 * Refresh metadata from disk, updating this instance in place
 	 */
 	async refresh(): Promise<Result<FlakeMetadata>> {
-		try {
-			const result =
-				await $`nix flake metadata --json ${this.path} 2>/dev/null`.text();
-			const data: NixFlakeMetadataResponse = JSON.parse(result);
-			this.description = data.description;
-			this.inputs = parseInputs(data);
-			return { ok: true, data: this };
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err);
-			return { ok: false, error: `Failed to refresh flake metadata: ${msg}` };
+		const result = await fetchMetadata(this.path);
+		if (!result.ok) {
+			return {
+				ok: false,
+				error: `Failed to refresh flake metadata: ${result.error}`,
+			};
 		}
+
+		this.description = result.data.description;
+		this.inputs = parseInputs(result.data);
+		return { ok: true, data: this };
 	}
 
 	/**

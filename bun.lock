@@ -7,8 +7,8 @@
       "dependencies": {
         "@babel/core": "^7.28.5",
         "@babel/preset-typescript": "^7.28.5",
-        "@opentui/core": "^0.1.57",
-        "@opentui/solid": "^0.1.57",
+        "@opentui/core": "^0.1.59",
+        "@opentui/solid": "^0.1.59",
         "babel-preset-solid": "^1.9.10",
         "opentui-spinner": "^0.0.6",
         "solid-js": "^1.9.10",
@@ -18,7 +18,7 @@
         "@tsconfig/bun": "^1.0.10",
         "@types/babel__core": "^7.20.5",
         "@types/bun": "^1.3.4",
-        "bun2nix": "^2.0.5",
+        "bun2nix": "^2.0.6",
       },
       "peerDependencies": {
         "typescript": "^5.9.2",

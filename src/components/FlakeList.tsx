@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import { mocha, theme } from "../lib/theme";
-import type { FlakeInput, UpdateStatus } from "../lib/types";
 import { formatRelativeTime } from "../lib/time";
+import type { FlakeInput, UpdateStatus } from "../lib/types";
 
 interface FlakeListProps {
 	inputs: FlakeInput[];

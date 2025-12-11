@@ -248,6 +248,3 @@ export class FlakeMetadata {
 		}
 	}
 }
-
-// Re-export formatRelativeTime from shared time utilities
-export { formatRelativeTime } from "./time";

@@ -10,7 +10,7 @@ import type {
 /**
  * Resolve a path argument to a flake directory
  */
-export function resolveFlakePath(path: string): string {
+function resolveFlakePath(path: string): string {
 	const resolved = resolve(path);
 	if (resolved.endsWith("flake.nix")) {
 		return dirname(resolved);
@@ -21,7 +21,7 @@ export function resolveFlakePath(path: string): string {
 /**
  * Check if a flake.nix exists in the given path
  */
-export async function hasFlakeNix(path: string = "."): Promise<boolean> {
+ function hasFlakeNix(path: string = "."): Promise<boolean> {
 	const file = Bun.file(`${path}/flake.nix`);
 	return file.exists();
 }
@@ -200,6 +200,28 @@ export async function lockInputToRev(
 			success: false,
 			output: error instanceof Error ? error.message : String(error),
 		};
+	}
+}
+
+/**
+ * Load a flake from a path argument, handling resolution, validation, and metadata loading
+ */
+export async function loadFlake(
+	pathArg?: string,
+): Promise<{ ok: true; flake: FlakeMetadata } | { ok: false; error: string }> {
+	const flakePath = resolveFlakePath(pathArg || process.cwd());
+
+	const hasFlake = await hasFlakeNix(flakePath);
+	if (!hasFlake) {
+		return { ok: false, error: `No flake.nix found in ${flakePath}` };
+	}
+
+	try {
+		const flake = await getFlakeMetadata(flakePath);
+		return { ok: true, flake };
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		return { ok: false, error: `Failed to load flake metadata: ${msg}` };
 	}
 }
 

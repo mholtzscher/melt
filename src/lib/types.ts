@@ -1,3 +1,6 @@
+// Generic result type for operations that can fail
+export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+
 // Flake input types
 export type FlakeInputType =
 	| "github"

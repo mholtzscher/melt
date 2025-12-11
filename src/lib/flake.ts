@@ -4,6 +4,7 @@ import type {
 	FlakeInput,
 	FlakeInputType,
 	NixFlakeMetadataResponse,
+	Result,
 } from "./types";
 
 /**
@@ -148,11 +149,7 @@ export class FlakeMetadata {
 	/**
 	 * Load a flake from a path argument, handling resolution, validation, and metadata loading
 	 */
-	static async load(
-		pathArg?: string,
-	): Promise<
-		{ ok: true; flake: FlakeMetadata } | { ok: false; error: string }
-	> {
+	static async load(pathArg?: string): Promise<Result<FlakeMetadata>> {
 		const flakePath = resolveFlakePath(pathArg || process.cwd());
 
 		const hasFlake = await hasFlakeNix(flakePath);
@@ -169,7 +166,7 @@ export class FlakeMetadata {
 				data.description,
 				parseInputs(data),
 			);
-			return { ok: true, flake };
+			return { ok: true, data: flake };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
 			return { ok: false, error: `Failed to load flake metadata: ${msg}` };
@@ -179,16 +176,14 @@ export class FlakeMetadata {
 	/**
 	 * Refresh metadata from disk, updating this instance in place
 	 */
-	async refresh(): Promise<
-		{ ok: true; flake: FlakeMetadata } | { ok: false; error: string }
-	> {
+	async refresh(): Promise<Result<FlakeMetadata>> {
 		try {
 			const result =
 				await $`nix flake metadata --json ${this.path} 2>/dev/null`.text();
 			const data: NixFlakeMetadataResponse = JSON.parse(result);
 			this.description = data.description;
 			this.inputs = parseInputs(data);
-			return { ok: true, flake: this };
+			return { ok: true, data: this };
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
 			return { ok: false, error: `Failed to refresh flake metadata: ${msg}` };
@@ -198,22 +193,20 @@ export class FlakeMetadata {
 	/**
 	 * Update specific flake inputs
 	 */
-	async updateInputs(
-		inputNames: string[],
-	): Promise<{ success: boolean; output: string }> {
+	async updateInputs(inputNames: string[]): Promise<Result<string>> {
 		if (inputNames.length === 0) {
-			return { success: true, output: "No inputs to update" };
+			return { ok: true, data: "No inputs to update" };
 		}
 
 		try {
 			const args = inputNames.join(" ");
 			const result =
 				await $`nix flake update ${args} --flake ${this.path} 2>&1`.text();
-			return { success: true, output: result };
+			return { ok: true, data: result };
 		} catch (error) {
 			return {
-				success: false,
-				output: error instanceof Error ? error.message : String(error),
+				ok: false,
+				error: error instanceof Error ? error.message : String(error),
 			};
 		}
 	}
@@ -221,14 +214,14 @@ export class FlakeMetadata {
 	/**
 	 * Update all flake inputs
 	 */
-	async updateAll(): Promise<{ success: boolean; output: string }> {
+	async updateAll(): Promise<Result<string>> {
 		try {
 			const result = await $`nix flake update --flake ${this.path} 2>&1`.text();
-			return { success: true, output: result };
+			return { ok: true, data: result };
 		} catch (error) {
 			return {
-				success: false,
-				output: error instanceof Error ? error.message : String(error),
+				ok: false,
+				error: error instanceof Error ? error.message : String(error),
 			};
 		}
 	}
@@ -241,16 +234,16 @@ export class FlakeMetadata {
 		rev: string,
 		owner: string,
 		repo: string,
-	): Promise<{ success: boolean; output: string }> {
+	): Promise<Result<string>> {
 		try {
 			const overrideUrl = `github:${owner}/${repo}/${rev}`;
 			const result =
 				await $`nix flake update ${inputName} --override-input ${inputName} ${overrideUrl} --flake ${this.path} 2>&1`.text();
-			return { success: true, output: result };
+			return { ok: true, data: result };
 		} catch (error) {
 			return {
-				success: false,
-				output: error instanceof Error ? error.message : String(error),
+				ok: false,
+				error: error instanceof Error ? error.message : String(error),
 			};
 		}
 	}

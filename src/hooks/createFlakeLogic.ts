@@ -56,11 +56,11 @@ export function createFlakeLogic(
 			return;
 		}
 
-		setState("inputs", result.flake.inputs);
-		setState("description", result.flake.description);
+		setState("inputs", result.data.inputs);
+		setState("description", result.data.description);
 
 		// Re-check for updates after refresh
-		await checkUpdates(result.flake.inputs);
+		await checkUpdates(result.data.inputs);
 	}
 
 	async function updateSelected() {
@@ -80,12 +80,12 @@ export function createFlakeLogic(
 		const result = await flake.updateInputs(names);
 		setState("loading", false);
 
-		if (result.success) {
+		if (result.ok) {
 			setState("selectedIndices", new Set<number>());
 			await refresh();
 			setState("statusMessage", `Updated ${names.length} input(s)`);
 		} else {
-			setState("statusMessage", `Error: ${result.output}`);
+			setState("statusMessage", `Error: ${result.error}`);
 		}
 
 		setTimeout(() => setState("statusMessage", undefined), 3000);
@@ -98,12 +98,12 @@ export function createFlakeLogic(
 		const result = await flake.updateAll();
 		setState("loading", false);
 
-		if (result.success) {
+		if (result.ok) {
 			setState("selectedIndices", new Set<number>());
 			await refresh();
 			setState("statusMessage", "All inputs updated");
 		} else {
-			setState("statusMessage", `Error: ${result.output}`);
+			setState("statusMessage", `Error: ${result.error}`);
 		}
 
 		setTimeout(() => setState("statusMessage", undefined), 3000);
@@ -122,7 +122,7 @@ export function createFlakeLogic(
 
 		const result = await flake.lockInputToRev(inputName, sha, owner, repo);
 
-		if (result.success) {
+		if (result.ok) {
 			setState(
 				"statusMessage",
 				`Locked ${inputName} to ${sha.substring(0, 7)}`,
@@ -131,7 +131,7 @@ export function createFlakeLogic(
 			setTimeout(() => setState("statusMessage", undefined), 3000);
 			return true;
 		} else {
-			setState("statusMessage", `Error: ${result.output}`);
+			setState("statusMessage", `Error: ${result.error}`);
 			setTimeout(() => setState("statusMessage", undefined), 3000);
 			return false;
 		}

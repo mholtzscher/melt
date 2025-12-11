@@ -3,7 +3,6 @@ import { $ } from "bun";
 import type {
 	FlakeInput,
 	FlakeInputType,
-	FlakeMetadata,
 	NixFlakeMetadataResponse,
 } from "./types";
 
@@ -21,9 +20,8 @@ function resolveFlakePath(path: string): string {
 /**
  * Check if a flake.nix exists in the given path
  */
- function hasFlakeNix(path: string = "."): Promise<boolean> {
-	const file = Bun.file(`${path}/flake.nix`);
-	return file.exists();
+function hasFlakeNix(path: string = "."): Promise<boolean> {
+	return Bun.file(`${path}/flake.nix`).exists();
 }
 
 /**
@@ -90,25 +88,15 @@ function getInputUrl(
 }
 
 /**
- * Get flake metadata from the current directory
+ * Parse nix flake metadata response into FlakeInput array
  */
-export async function getFlakeMetadata(
-	path: string = ".",
-): Promise<FlakeMetadata> {
-	const result = await $`nix flake metadata --json ${path} 2>/dev/null`.text();
-	const data: NixFlakeMetadataResponse = JSON.parse(result);
-
+function parseInputs(data: NixFlakeMetadataResponse): FlakeInput[] {
 	const rootNode = data.locks.nodes[data.locks.root];
-	if (!rootNode || !rootNode.inputs) {
-		return {
-			description: data.description,
-			inputs: [],
-			path,
-		};
+	if (!rootNode?.inputs) {
+		return [];
 	}
 
 	const directInputNames = Object.keys(rootNode.inputs);
-
 	const inputs: FlakeInput[] = [];
 
 	for (const name of directInputNames) {
@@ -128,7 +116,7 @@ export async function getFlakeMetadata(
 			type: getInputType(locked, original),
 			owner: locked.owner || original?.owner,
 			repo: locked.repo || original?.repo,
-			ref: original?.ref, // branch/tag reference (e.g., "nixos-unstable")
+			ref: original?.ref,
 			url: getInputUrl(locked, original),
 			rev: locked.rev || "",
 			shortRev: locked.rev?.substring(0, 7) || "",
@@ -136,92 +124,135 @@ export async function getFlakeMetadata(
 		});
 	}
 
-	return {
-		description: data.description,
-		inputs,
-		path,
-	};
+	return inputs;
 }
 
 /**
- * Update specific flake inputs
+ * Flake metadata with methods for updates and refresh
  */
-export async function updateInputs(
-	inputNames: string[],
-	path: string = ".",
-): Promise<{ success: boolean; output: string }> {
-	try {
-		const args = inputNames.join(" ");
-		const result =
-			await $`nix flake update ${args} --flake ${path} 2>&1`.text();
-		return { success: true, output: result };
-	} catch (error) {
-		return {
-			success: false,
-			output: error instanceof Error ? error.message : String(error),
-		};
-	}
-}
+export class FlakeMetadata {
+	readonly path: string;
+	description?: string;
+	inputs: FlakeInput[];
 
-/**
- * Update all flake inputs
- */
-export async function updateAll(
-	path: string = ".",
-): Promise<{ success: boolean; output: string }> {
-	try {
-		const result = await $`nix flake update --flake ${path} 2>&1`.text();
-		return { success: true, output: result };
-	} catch (error) {
-		return {
-			success: false,
-			output: error instanceof Error ? error.message : String(error),
-		};
-	}
-}
-
-/**
- * Lock a specific input to a specific revision
- */
-export async function lockInputToRev(
-	inputName: string,
-	rev: string,
-	owner: string,
-	repo: string,
-	path: string = ".",
-): Promise<{ success: boolean; output: string }> {
-	try {
-		const overrideUrl = `github:${owner}/${repo}/${rev}`;
-		const result =
-			await $`nix flake update ${inputName} --override-input ${inputName} ${overrideUrl} --flake ${path} 2>&1`.text();
-		return { success: true, output: result };
-	} catch (error) {
-		return {
-			success: false,
-			output: error instanceof Error ? error.message : String(error),
-		};
-	}
-}
-
-/**
- * Load a flake from a path argument, handling resolution, validation, and metadata loading
- */
-export async function loadFlake(
-	pathArg?: string,
-): Promise<{ ok: true; flake: FlakeMetadata } | { ok: false; error: string }> {
-	const flakePath = resolveFlakePath(pathArg || process.cwd());
-
-	const hasFlake = await hasFlakeNix(flakePath);
-	if (!hasFlake) {
-		return { ok: false, error: `No flake.nix found in ${flakePath}` };
+	private constructor(
+		path: string,
+		description: string | undefined,
+		inputs: FlakeInput[],
+	) {
+		this.path = path;
+		this.description = description;
+		this.inputs = inputs;
 	}
 
-	try {
-		const flake = await getFlakeMetadata(flakePath);
-		return { ok: true, flake };
-	} catch (err) {
-		const msg = err instanceof Error ? err.message : String(err);
-		return { ok: false, error: `Failed to load flake metadata: ${msg}` };
+	/**
+	 * Load a flake from a path argument, handling resolution, validation, and metadata loading
+	 */
+	static async load(
+		pathArg?: string,
+	): Promise<
+		{ ok: true; flake: FlakeMetadata } | { ok: false; error: string }
+	> {
+		const flakePath = resolveFlakePath(pathArg || process.cwd());
+
+		const hasFlake = await hasFlakeNix(flakePath);
+		if (!hasFlake) {
+			return { ok: false, error: `No flake.nix found in ${flakePath}` };
+		}
+
+		try {
+			const result =
+				await $`nix flake metadata --json ${flakePath} 2>/dev/null`.text();
+			const data: NixFlakeMetadataResponse = JSON.parse(result);
+			const flake = new FlakeMetadata(
+				flakePath,
+				data.description,
+				parseInputs(data),
+			);
+			return { ok: true, flake };
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			return { ok: false, error: `Failed to load flake metadata: ${msg}` };
+		}
+	}
+
+	/**
+	 * Refresh metadata from disk, updating this instance in place
+	 */
+	async refresh(): Promise<
+		{ ok: true; flake: FlakeMetadata } | { ok: false; error: string }
+	> {
+		try {
+			const result =
+				await $`nix flake metadata --json ${this.path} 2>/dev/null`.text();
+			const data: NixFlakeMetadataResponse = JSON.parse(result);
+			this.description = data.description;
+			this.inputs = parseInputs(data);
+			return { ok: true, flake: this };
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			return { ok: false, error: `Failed to refresh flake metadata: ${msg}` };
+		}
+	}
+
+	/**
+	 * Update specific flake inputs
+	 */
+	async updateInputs(
+		inputNames: string[],
+	): Promise<{ success: boolean; output: string }> {
+		if (inputNames.length === 0) {
+			return { success: true, output: "No inputs to update" };
+		}
+
+		try {
+			const args = inputNames.join(" ");
+			const result =
+				await $`nix flake update ${args} --flake ${this.path} 2>&1`.text();
+			return { success: true, output: result };
+		} catch (error) {
+			return {
+				success: false,
+				output: error instanceof Error ? error.message : String(error),
+			};
+		}
+	}
+
+	/**
+	 * Update all flake inputs
+	 */
+	async updateAll(): Promise<{ success: boolean; output: string }> {
+		try {
+			const result = await $`nix flake update --flake ${this.path} 2>&1`.text();
+			return { success: true, output: result };
+		} catch (error) {
+			return {
+				success: false,
+				output: error instanceof Error ? error.message : String(error),
+			};
+		}
+	}
+
+	/**
+	 * Lock a specific input to a specific revision
+	 */
+	async lockInputToRev(
+		inputName: string,
+		rev: string,
+		owner: string,
+		repo: string,
+	): Promise<{ success: boolean; output: string }> {
+		try {
+			const overrideUrl = `github:${owner}/${repo}/${rev}`;
+			const result =
+				await $`nix flake update ${inputName} --override-input ${inputName} ${overrideUrl} --flake ${this.path} 2>&1`.text();
+			return { success: true, output: result };
+		} catch (error) {
+			return {
+				success: false,
+				output: error instanceof Error ? error.message : String(error),
+			};
+		}
 	}
 }
 

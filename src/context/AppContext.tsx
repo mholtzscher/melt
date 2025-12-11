@@ -1,12 +1,8 @@
 import { createContext, type JSX, onMount, useContext } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import { createFlakeLogic } from "../hooks/createFlakeLogic";
-import type {
-	AppView,
-	FlakeInput,
-	FlakeMetadata,
-	UpdateStatus,
-} from "../lib/types";
+import type { FlakeMetadata } from "../lib/flake";
+import type { AppView, FlakeInput, UpdateStatus } from "../lib/types";
 
 export interface AppState {
 	// View state
@@ -72,7 +68,7 @@ export function AppProvider(props: AppProviderProps) {
 		updateStatuses: new Map(),
 	});
 
-	const flakeLogic = createFlakeLogic(state, setState, props.flake.path);
+	const flakeLogic = createFlakeLogic(state, setState, props.flake);
 
 	// Check for updates in background on mount
 	onMount(() => {

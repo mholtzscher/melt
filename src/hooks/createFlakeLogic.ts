@@ -1,19 +1,14 @@
 import type { SetStoreFunction } from "solid-js/store";
 import { produce } from "solid-js/store";
 import type { AppState } from "../context/AppContext";
-import {
-	getFlakeMetadata,
-	lockInputToRev,
-	updateAll as updateAllInputs,
-	updateInputs,
-} from "../lib/flake";
+import type { FlakeMetadata } from "../lib/flake";
 import { checkForUpdates, hasGitHubToken } from "../lib/github";
 import type { FlakeInput } from "../lib/types";
 
 export function createFlakeLogic(
 	state: AppState,
 	setState: SetStoreFunction<AppState>,
-	flakePath: string,
+	flake: FlakeMetadata,
 ) {
 	// Guard to prevent concurrent update checks
 	let isCheckingUpdates = false;
@@ -54,20 +49,18 @@ export function createFlakeLogic(
 
 	async function refresh() {
 		setState("statusMessage", "Refreshing...");
-		try {
-			const metadata = await getFlakeMetadata(flakePath);
-			setState("inputs", metadata.inputs);
-			setState("description", metadata.description);
-
-			// Re-check for updates after refresh
-			await checkUpdates(metadata.inputs);
-		} catch (err) {
-			setState(
-				"statusMessage",
-				`Error: ${err instanceof Error ? err.message : err}`,
-			);
+		const result = await flake.refresh();
+		if (!result.ok) {
+			setState("statusMessage", `Error: ${result.error}`);
 			setTimeout(() => setState("statusMessage", undefined), 3000);
+			return;
 		}
+
+		setState("inputs", result.flake.inputs);
+		setState("description", result.flake.description);
+
+		// Re-check for updates after refresh
+		await checkUpdates(result.flake.inputs);
 	}
 
 	async function updateSelected() {
@@ -84,7 +77,7 @@ export function createFlakeLogic(
 		setState("statusMessage", `Updating ${names.join(", ")}...`);
 		setState("loading", true);
 
-		const result = await updateInputs(names, flakePath);
+		const result = await flake.updateInputs(names);
 		setState("loading", false);
 
 		if (result.success) {
@@ -102,7 +95,7 @@ export function createFlakeLogic(
 		setState("statusMessage", "Updating all inputs...");
 		setState("loading", true);
 
-		const result = await updateAllInputs(flakePath);
+		const result = await flake.updateAll();
 		setState("loading", false);
 
 		if (result.success) {
@@ -127,7 +120,7 @@ export function createFlakeLogic(
 			`Locking ${inputName} to ${sha.substring(0, 7)}...`,
 		);
 
-		const result = await lockInputToRev(inputName, sha, owner, repo, flakePath);
+		const result = await flake.lockInputToRev(inputName, sha, owner, repo);
 
 		if (result.success) {
 			setState(

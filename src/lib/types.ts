@@ -19,12 +19,6 @@ export interface FlakeInput {
 	lastModified: number;
 }
 
-export interface FlakeMetadata {
-	description?: string;
-	inputs: FlakeInput[];
-	path: string;
-}
-
 // GitHub types for changelog
 export interface GitHubCommit {
 	sha: string;

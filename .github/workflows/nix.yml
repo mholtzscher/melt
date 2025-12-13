@@ -9,5 +9,3 @@ on:
 jobs:
   nix:
     uses: mholtzscher/github-actions/.github/workflows/nix-build.yml@main
-    with:
-      check-bun-nix-sync: true

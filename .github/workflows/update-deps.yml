@@ -6,12 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  update-bun:
-    uses: mholtzscher/github-actions/.github/workflows/update-bun-deps.yml@main
-    secrets:
-      token: ${{ secrets.PAT }}
-
-  update-nix:
-    uses: mholtzscher/github-actions/.github/workflows/update-nix-flake.yml@main
+  update:
+    uses: mholtzscher/github-actions/.github/workflows/update-deps.yml@main
     secrets:
       token: ${{ secrets.PAT }}

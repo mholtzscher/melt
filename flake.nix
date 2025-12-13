@@ -5,13 +5,12 @@
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     systems.url = "github:nix-systems/default";
     bun2nix = {
-      url = "github:nix-community/bun2nix?tag=2.0.5";
+      url = "github:nix-community/bun2nix?tag=2.0.6";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.systems.follows = "systems";
     };
   };
 
-  # Use the cached version of bun2nix from the nix-community cli
   nixConfig = {
     extra-substituters = [
       "https://cache.nixos.org"
@@ -26,36 +25,73 @@
   outputs =
     inputs:
     let
-      # Read each system from the nix-systems input
       eachSystem = inputs.nixpkgs.lib.genAttrs (import inputs.systems);
 
-      # Access the package set for a given system
       pkgsFor = eachSystem (
         system:
         import inputs.nixpkgs {
           inherit system;
-          # Use the bun2nix overlay, which puts `bun2nix` in pkgs
-          # You can, of course, still access
-          # inputs.bun2nix.packages.${system}.default instead
-          # and use that to build your package instead
           overlays = [ inputs.bun2nix.overlays.default ];
         }
       );
     in
     {
-      packages = eachSystem (system: {
-        # Produce a package for this template with bun2nix in
-        # the overlay
-        default = pkgsFor.${system}.callPackage ./default.nix { };
-      });
+      packages = eachSystem (
+        system:
+        let
+          pkgs = pkgsFor.${system};
+        in
+        {
+          default = pkgs.bun2nix.mkDerivation {
+            pname = "melt";
+            version = "0.1.0";
+
+            src = ./.;
+
+            bunDeps = pkgs.bun2nix.fetchBunDeps {
+              bunNix = ./bun.nix;
+            };
+
+            nativeBuildInputs = with pkgs; [
+              makeWrapper
+              bun
+            ];
+
+            env.MELT_VERSION = "0.1.0";
+
+            buildPhase = ''
+              runHook preBuild
+              bun run ./bundle.ts
+              runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/lib/melt $out/bin
+
+              cp -r dist node_modules $out/lib/melt
+
+              makeWrapper ${pkgs.bun}/bin/bun $out/bin/melt \
+                --add-flags "run" \
+                --add-flags "$out/lib/melt/dist/index.js" \
+                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.nix ]} \
+                --argv0 melt
+
+              runHook postInstall
+            '';
+
+            meta = {
+              description = "A TUI for managing Nix flake inputs";
+              mainProgram = "melt";
+            };
+          };
+        }
+      );
 
       devShells = eachSystem (system: {
         default = pkgsFor.${system}.mkShell {
           packages = with pkgsFor.${system}; [
             bun
-
-            # Add the bun2nix binary to our devshell
-            # Optional now that we have a binary on npm
             bun2nix
           ];
 

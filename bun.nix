@@ -349,37 +349,37 @@
     url = "https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.30.tgz";
     hash = "sha512-GQ7Nw5G2lTu/BtHTKfXhKHok2WGetd4XYcVKGx00SjAk8GMwgJM3zr6zORiPGuOE+/vkc90KtTosSSvaCjKb2Q==";
   };
-  "@opentui/core-darwin-arm64@0.1.60" = fetchurl {
-    url = "https://registry.npmjs.org/@opentui/core-darwin-arm64/-/core-darwin-arm64-0.1.60.tgz";
-    hash = "sha512-N4feqnOBDA4O4yocpat5vOiV06HqJVwJGx8rEZE9DiOtl1i+1cPQ1Lx6+zWdLhbrVBJ0ENhb7Azox8sXkm/+5Q==";
+  "@opentui/core-darwin-arm64@0.1.61" = fetchurl {
+    url = "https://registry.npmjs.org/@opentui/core-darwin-arm64/-/core-darwin-arm64-0.1.61.tgz";
+    hash = "sha512-zX7EK8PwBJFwsZ2tDnScLFD0GbBfHE7sqpzGDXP2luMnBZJ0OOO95a4Hzu9dQWqxEr4RgfGDT8uIRhgimKNQEg==";
   };
-  "@opentui/core-darwin-x64@0.1.60" = fetchurl {
-    url = "https://registry.npmjs.org/@opentui/core-darwin-x64/-/core-darwin-x64-0.1.60.tgz";
-    hash = "sha512-+z3q4WaoIs7ANU8+eTFlvnfCjAS81rk81TOdZm4TJ53Ti3/B+yheWtnV/mLpLLhvZDz2VUVxxRmfDrGMnJb4fQ==";
+  "@opentui/core-darwin-x64@0.1.61" = fetchurl {
+    url = "https://registry.npmjs.org/@opentui/core-darwin-x64/-/core-darwin-x64-0.1.61.tgz";
+    hash = "sha512-xfvl8EnyN0XwlYpyTskVhHOpbMdgt++ntcuTh7M7IEFYQGzJux19NBwJl17mOxB1McG+KTa7kNx5/zu0VB9eVQ==";
   };
-  "@opentui/core-linux-arm64@0.1.60" = fetchurl {
-    url = "https://registry.npmjs.org/@opentui/core-linux-arm64/-/core-linux-arm64-0.1.60.tgz";
-    hash = "sha512-/Q65sjqVGB9ygJ6lStI8n1X6RyfmJZC8XofRGEuFiMLiWcWC/xoBtztdL8LAIvHQy42y2+pl9zIiW0fWSQ0wjw==";
+  "@opentui/core-linux-arm64@0.1.61" = fetchurl {
+    url = "https://registry.npmjs.org/@opentui/core-linux-arm64/-/core-linux-arm64-0.1.61.tgz";
+    hash = "sha512-Ghg7j4H6bz7CLxhgDcWx3Ann3AblDIjKFUu4vFrVysuiwfmDHwdKm8awLj8tnmC/0y8juG4ODUQbR0BXBIkE+Q==";
   };
-  "@opentui/core-linux-x64@0.1.60" = fetchurl {
-    url = "https://registry.npmjs.org/@opentui/core-linux-x64/-/core-linux-x64-0.1.60.tgz";
-    hash = "sha512-AegF+g7OguIpjZKN+PS55sc3ZFY6fj+fLwfETbSRGw6NqX+aiwpae0Y3gXX1s298Yq5yQEzMXnARTCJTGH4uzg==";
+  "@opentui/core-linux-x64@0.1.61" = fetchurl {
+    url = "https://registry.npmjs.org/@opentui/core-linux-x64/-/core-linux-x64-0.1.61.tgz";
+    hash = "sha512-Xs9czMEOuHtnX4tigC4fNb1MU7+Gaohbk+k4teraulIgYZf19nRHIKNvXissDjOfqvOGygCkxMQIG0zeUFsPEA==";
   };
-  "@opentui/core-win32-arm64@0.1.60" = fetchurl {
-    url = "https://registry.npmjs.org/@opentui/core-win32-arm64/-/core-win32-arm64-0.1.60.tgz";
-    hash = "sha512-fbkq8MOZJgT3r9q3JWqsfVxRpQ1SlbmhmvB35BzukXnZBK8eA178wbSadGH6irMDrkSIYye9WYddHI/iXjmgVQ==";
+  "@opentui/core-win32-arm64@0.1.61" = fetchurl {
+    url = "https://registry.npmjs.org/@opentui/core-win32-arm64/-/core-win32-arm64-0.1.61.tgz";
+    hash = "sha512-2CYAEPqArJqE36LkSRAs0csRzWwVJY99S/7EuY7abBm58BIL6RUw5kSw1r75oDo4I3W6v6WwW0u8B5Ik98m0Kg==";
   };
-  "@opentui/core-win32-x64@0.1.60" = fetchurl {
-    url = "https://registry.npmjs.org/@opentui/core-win32-x64/-/core-win32-x64-0.1.60.tgz";
-    hash = "sha512-OebCL7f9+CKodBw0G+NvKIcc74bl6/sBEHfb73cACdJDJKh+T3C3Vt9H3kQQ0m1C8wRAqX6rh706OArk1pUb2A==";
+  "@opentui/core-win32-x64@0.1.61" = fetchurl {
+    url = "https://registry.npmjs.org/@opentui/core-win32-x64/-/core-win32-x64-0.1.61.tgz";
+    hash = "sha512-c0OK5YwcKH51Qj6wPmwTZP3X8LHA0I0dKz4fO4mOh4f+OqgU9WOG4hpbf7lv0bVlHoTvgP4zDUsjmtIVA8l6Lg==";
   };
-  "@opentui/core@0.1.60" = fetchurl {
-    url = "https://registry.npmjs.org/@opentui/core/-/core-0.1.60.tgz";
-    hash = "sha512-28jphd0AJo48uvEuKXcT9pJhgAu8I2rEJhPt25cc5ipJ2iw/eDk1uoxrbID80MPDqgOEzN21vXmzXwCd6ao+hg==";
+  "@opentui/core@0.1.61" = fetchurl {
+    url = "https://registry.npmjs.org/@opentui/core/-/core-0.1.61.tgz";
+    hash = "sha512-WrVbdki0tnsgmWCB3Iix6n8eXGXUheTqr/tcnBN7gLA/TqT9udcX+DW3/qRdgtTNJS1sVBVeuwSTYU3eqDSUJQ==";
   };
-  "@opentui/solid@0.1.60" = fetchurl {
-    url = "https://registry.npmjs.org/@opentui/solid/-/solid-0.1.60.tgz";
-    hash = "sha512-pn91stzAHNGWaNL6h39q55bq3G1/DLqxKtT3wVsRAV68dHfPpwmqikX1nEJZK8OU84ZTPS9Ly9fz8po2Mot2uQ==";
+  "@opentui/solid@0.1.61" = fetchurl {
+    url = "https://registry.npmjs.org/@opentui/solid/-/solid-0.1.61.tgz";
+    hash = "sha512-CiZHduIoeABoS0ev+eGeHA/LiRl/SpdL6io4jrwiwFi/rToKtc7YgJ8MWxIgeHScHUbpQnIr1v7jzsGI3DAYvw==";
   };
   "@tokenizer/token@0.3.0" = fetchurl {
     url = "https://registry.npmjs.org/@tokenizer/token/-/token-0.3.0.tgz";

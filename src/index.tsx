@@ -3,6 +3,7 @@ import "opentui-spinner/solid";
 import { App } from "./components/App";
 import { AppProvider } from "./context/AppContext";
 import { ChangelogProvider } from "./context/ChangelogContext";
+import { parseArgs } from "./lib/cli";
 import { FlakeMetadata } from "./lib/flake";
 
 function Root(props: { flake: FlakeMetadata }) {
@@ -16,7 +17,8 @@ function Root(props: { flake: FlakeMetadata }) {
 }
 
 async function main() {
-	const result = await FlakeMetadata.load(process.argv[2]);
+	const args = await parseArgs();
+	const result = await FlakeMetadata.load(args.flake);
 	if (!result.ok) {
 		console.error(result.error);
 		process.exit(1);

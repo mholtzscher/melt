@@ -5,7 +5,27 @@ import type {
 	FlakeInputType,
 	NixFlakeMetadataResponse,
 	Result,
-} from "./types";
+} from "../types";
+
+export interface FlakeService {
+	load(pathArg?: string): Promise<Result<FlakeData>>;
+	refresh(path: string): Promise<Result<FlakeData>>;
+	updateInputs(path: string, inputNames: string[]): Promise<Result<string>>;
+	updateAll(path: string): Promise<Result<string>>;
+	lockInputToRev(
+		path: string,
+		inputName: string,
+		rev: string,
+		owner: string,
+		repo: string,
+	): Promise<Result<string>>;
+}
+
+export interface FlakeData {
+	path: string;
+	description?: string;
+	inputs: FlakeInput[];
+}
 
 /**
  * Resolve a path argument to a flake directory
@@ -144,28 +164,8 @@ async function fetchMetadata(
 	}
 }
 
-/**
- * Flake metadata with methods for updates and refresh
- */
-export class FlakeMetadata {
-	readonly path: string;
-	description?: string;
-	inputs: FlakeInput[];
-
-	private constructor(
-		path: string,
-		description: string | undefined,
-		inputs: FlakeInput[],
-	) {
-		this.path = path;
-		this.description = description;
-		this.inputs = inputs;
-	}
-
-	/**
-	 * Load a flake from a path argument, handling resolution, validation, and metadata loading
-	 */
-	static async load(pathArg?: string): Promise<Result<FlakeMetadata>> {
+export const flakeService: FlakeService = {
+	async load(pathArg?: string): Promise<Result<FlakeData>> {
 		const flakePath = resolveFlakePath(pathArg || process.cwd());
 
 		const hasFlake = await hasFlakeNix(flakePath);
@@ -183,19 +183,16 @@ export class FlakeMetadata {
 
 		return {
 			ok: true,
-			data: new FlakeMetadata(
-				flakePath,
-				result.data.description,
-				parseInputs(result.data),
-			),
+			data: {
+				path: flakePath,
+				description: result.data.description,
+				inputs: parseInputs(result.data),
+			},
 		};
-	}
+	},
 
-	/**
-	 * Refresh metadata from disk, updating this instance in place
-	 */
-	async refresh(): Promise<Result<FlakeMetadata>> {
-		const result = await fetchMetadata(this.path);
+	async refresh(path: string): Promise<Result<FlakeData>> {
+		const result = await fetchMetadata(path);
 		if (!result.ok) {
 			return {
 				ok: false,
@@ -203,15 +200,20 @@ export class FlakeMetadata {
 			};
 		}
 
-		this.description = result.data.description;
-		this.inputs = parseInputs(result.data);
-		return { ok: true, data: this };
-	}
+		return {
+			ok: true,
+			data: {
+				path,
+				description: result.data.description,
+				inputs: parseInputs(result.data),
+			},
+		};
+	},
 
-	/**
-	 * Update specific flake inputs
-	 */
-	async updateInputs(inputNames: string[]): Promise<Result<string>> {
+	async updateInputs(
+		path: string,
+		inputNames: string[],
+	): Promise<Result<string>> {
 		if (inputNames.length === 0) {
 			return { ok: true, data: "No inputs to update" };
 		}
@@ -219,7 +221,7 @@ export class FlakeMetadata {
 		try {
 			const args = inputNames.join(" ");
 			const result =
-				await $`nix flake update ${args} --flake ${this.path} 2>&1`.text();
+				await $`nix flake update ${args} --flake ${path} 2>&1`.text();
 			return { ok: true, data: result };
 		} catch (error) {
 			return {
@@ -227,14 +229,11 @@ export class FlakeMetadata {
 				error: error instanceof Error ? error.message : String(error),
 			};
 		}
-	}
+	},
 
-	/**
-	 * Update all flake inputs
-	 */
-	async updateAll(): Promise<Result<string>> {
+	async updateAll(path: string): Promise<Result<string>> {
 		try {
-			const result = await $`nix flake update --flake ${this.path} 2>&1`.text();
+			const result = await $`nix flake update --flake ${path} 2>&1`.text();
 			return { ok: true, data: result };
 		} catch (error) {
 			return {
@@ -242,12 +241,10 @@ export class FlakeMetadata {
 				error: error instanceof Error ? error.message : String(error),
 			};
 		}
-	}
+	},
 
-	/**
-	 * Lock a specific input to a specific revision
-	 */
 	async lockInputToRev(
+		path: string,
 		inputName: string,
 		rev: string,
 		owner: string,
@@ -256,7 +253,7 @@ export class FlakeMetadata {
 		try {
 			const overrideUrl = `github:${owner}/${repo}/${rev}`;
 			const result =
-				await $`nix flake update ${inputName} --override-input ${inputName} ${overrideUrl} --flake ${this.path} 2>&1`.text();
+				await $`nix flake update ${inputName} --override-input ${inputName} ${overrideUrl} --flake ${path} 2>&1`.text();
 			return { ok: true, data: result };
 		} catch (error) {
 			return {
@@ -264,5 +261,5 @@ export class FlakeMetadata {
 				error: error instanceof Error ? error.message : String(error),
 			};
 		}
-	}
-}
+	},
+};

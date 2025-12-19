@@ -1,16 +1,25 @@
+import type { Accessor } from "solid-js";
 import { Show } from "solid-js";
-import { mocha, theme } from "../lib/theme";
-import type { GitHubCommit } from "../lib/types";
+import { mocha, theme } from "../theme";
+import type { GitHubCommit } from "../types";
 
-interface ConfirmDialogProps {
-	visible: boolean;
-	inputName: string;
-	commit: GitHubCommit | undefined;
+export interface ConfirmDialogProps {
+	visible: Accessor<boolean>;
+	inputName: Accessor<string>;
+	commit: Accessor<GitHubCommit | undefined>;
 }
 
 export function ConfirmDialog(props: ConfirmDialogProps) {
+	const commitMessage = () => {
+		const c = props.commit();
+		if (!c?.message) return "";
+		return c.message.length > 40
+			? `${c.message.substring(0, 40)}...`
+			: c.message;
+	};
+
 	return (
-		<Show when={props.visible && props.commit}>
+		<Show when={props.visible() && props.commit()}>
 			<box
 				position="absolute"
 				top={0}
@@ -28,23 +37,16 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
 					padding={1}
 					minWidth={45}
 				>
-					{/* Title */}
 					<box height={1} flexDirection="row">
 						<text fg={theme.text} attributes={1}>
-							Lock {props.inputName} to {props.commit?.shortSha}?
+							Lock {props.inputName()} to {props.commit()?.shortSha}?
 						</text>
 					</box>
 
-					{/* Commit message preview */}
 					<box height={1} marginTop={1}>
-						<text fg={theme.textDim}>
-							{props.commit?.message && props.commit.message.length > 40
-								? `${props.commit.message.substring(0, 40)}...`
-								: props.commit?.message}
-						</text>
+						<text fg={theme.textDim}>{commitMessage()}</text>
 					</box>
 
-					{/* Actions */}
 					<box
 						height={1}
 						marginTop={1}

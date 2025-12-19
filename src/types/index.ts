@@ -82,8 +82,6 @@ export type AppView = "list" | "changelog" | "updating";
 export interface FlakeState {
 	inputs: Accessor<FlakeInput[]>;
 	setInputs: Setter<FlakeInput[]>;
-	description: Accessor<string | undefined>;
-	setDescription: Setter<string | undefined>;
 	flakePath: Accessor<string>;
 }
 

@@ -1,6 +1,6 @@
 import { useKeyboard } from "@opentui/solid";
 import type { Accessor } from "solid-js";
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { HelpBar } from "../components/HelpBar";
 import { shortcuts } from "../config/shortcuts";
 import { timeService } from "../services/time";
@@ -10,15 +10,11 @@ import type { FlakeInput, UpdateStatus } from "../types";
 export interface ListViewProps {
 	inputs: Accessor<FlakeInput[]>;
 	updateStatuses: Accessor<Map<string, UpdateStatus>>;
-	cursorIndex: Accessor<number>;
-	setCursorIndex: (index: number) => void;
-	selectedIndices: Accessor<Set<number>>;
-	setSelectedIndices: (indices: Set<number>) => void;
 	statusMessage: Accessor<string | undefined>;
 	loading: Accessor<boolean>;
-	onShowChangelog: () => void;
+	onShowChangelog: (input: FlakeInput) => void;
 	onRefresh: () => void;
-	onUpdateSelected: () => void;
+	onUpdateSelected: (names: string[]) => void;
 	onUpdateAll: () => void;
 	onQuit: () => void;
 }
@@ -41,29 +37,44 @@ function getTypeBadgeColor(type: FlakeInput["type"]): string {
 }
 
 export function ListView(props: ListViewProps) {
+	const [cursorIndex, setCursorIndex] = createSignal(0);
+	const [selectedIndices, setSelectedIndices] = createSignal<Set<number>>(
+		new Set(),
+	);
+
 	function moveCursor(delta: number) {
 		const len = props.inputs().length;
 		if (len === 0) return;
-		const prev = props.cursorIndex();
+		const prev = cursorIndex();
 		const next = prev + delta;
-		if (next < 0) props.setCursorIndex(0);
-		else if (next >= len) props.setCursorIndex(len - 1);
-		else props.setCursorIndex(next);
+		if (next < 0) setCursorIndex(0);
+		else if (next >= len) setCursorIndex(len - 1);
+		else setCursorIndex(next);
+	}
+
+	function getCurrentInput() {
+		return props.inputs()[cursorIndex()];
+	}
+
+	function getSelectedNames(): string[] {
+		return Array.from(selectedIndices())
+			.map((i) => props.inputs()[i]?.name)
+			.filter((n): n is string => !!n);
 	}
 
 	function toggleSelection() {
-		const idx = props.cursorIndex();
-		const next = new Set(props.selectedIndices());
+		const idx = cursorIndex();
+		const next = new Set(selectedIndices());
 		if (next.has(idx)) {
 			next.delete(idx);
 		} else {
 			next.add(idx);
 		}
-		props.setSelectedIndices(next);
+		setSelectedIndices(next);
 	}
 
 	function clearSelection() {
-		props.setSelectedIndices(new Set<number>());
+		setSelectedIndices(new Set<number>());
 	}
 
 	useKeyboard((e) => {
@@ -85,18 +96,24 @@ export function ListView(props: ListViewProps) {
 				if (e.shift) {
 					props.onUpdateAll();
 				} else {
-					props.onUpdateSelected();
+					const names = getSelectedNames();
+					if (names.length > 0) {
+						props.onUpdateSelected(names);
+						clearSelection();
+					}
 				}
 				break;
-			case "c":
-				props.onShowChangelog();
+			case "c": {
+				const input = getCurrentInput();
+				if (input) props.onShowChangelog(input);
 				break;
+			}
 			case "r":
 				props.onRefresh();
 				break;
 			case "escape":
 			case "q":
-				if (props.selectedIndices().size > 0) {
+				if (selectedIndices().size > 0) {
 					clearSelection();
 				} else {
 					props.onQuit();
@@ -129,8 +146,8 @@ export function ListView(props: ListViewProps) {
 
 				<For each={props.inputs()}>
 					{(input, index) => {
-						const isSelected = () => props.selectedIndices().has(index());
-						const isCursor = () => props.cursorIndex() === index();
+						const isSelected = () => selectedIndices().has(index());
+						const isCursor = () => cursorIndex() === index();
 						const badgeColor = getTypeBadgeColor(input.type);
 
 						return (
@@ -201,7 +218,7 @@ export function ListView(props: ListViewProps) {
 			<HelpBar
 				statusMessage={props.statusMessage}
 				loading={props.loading}
-				selectedCount={() => props.selectedIndices().size}
+				selectedCount={() => selectedIndices().size}
 				shortcuts={shortcuts.list}
 			/>
 		</box>

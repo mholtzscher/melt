@@ -18,16 +18,7 @@ export function App(props: AppProps) {
 	const [inputs, setInputs] = createSignal<FlakeInput[]>(
 		props.initialFlake.inputs,
 	);
-	const [_description, setDescription] = createSignal<string | undefined>(
-		props.initialFlake.description,
-	);
 	const flakePath = () => props.initialFlake.path;
-
-	// List navigation state
-	const [cursorIndex, setCursorIndex] = createSignal(0);
-	const [selectedIndices, setSelectedIndices] = createSignal<Set<number>>(
-		new Set(),
-	);
 
 	// Update statuses state
 	const [updateStatuses, setUpdateStatuses] = createSignal<
@@ -45,25 +36,17 @@ export function App(props: AppProps) {
 		flakePath,
 		inputs,
 		setInputs,
-		setDescription,
-		selectedIndices,
-		setSelectedIndices,
 		setUpdateStatuses,
 		setLoading,
 		setStatusMessage,
 	});
-
-	const getCurrentInput = () => inputs()[cursorIndex()];
 
 	function quit(code = 0) {
 		renderer.destroy();
 		process.exit(code);
 	}
 
-	function showChangelog() {
-		const input = getCurrentInput();
-		if (!input) return;
-
+	function showChangelog(input: FlakeInput) {
 		if (input.type !== "github") {
 			setStatusMessage("Changelog only available for GitHub inputs");
 			setTimeout(() => setStatusMessage(undefined), 2000);
@@ -86,10 +69,6 @@ export function App(props: AppProps) {
 			<Show when={!changelogInput()}>
 				<ListView
 					inputs={inputs}
-					cursorIndex={cursorIndex}
-					setCursorIndex={setCursorIndex}
-					selectedIndices={selectedIndices}
-					setSelectedIndices={setSelectedIndices}
 					updateStatuses={updateStatuses}
 					statusMessage={statusMessage}
 					loading={loading}

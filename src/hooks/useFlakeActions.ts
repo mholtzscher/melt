@@ -7,9 +7,6 @@ export interface FlakeActionsProps {
 	flakePath: Accessor<string>;
 	inputs: Accessor<FlakeInput[]>;
 	setInputs: Setter<FlakeInput[]>;
-	setDescription: Setter<string | undefined>;
-	selectedIndices: Accessor<Set<number>>;
-	setSelectedIndices: Setter<Set<number>>;
 	setUpdateStatuses: Setter<Map<string, UpdateStatus>>;
 	setLoading: Setter<boolean>;
 	setStatusMessage: Setter<string | undefined>;
@@ -60,21 +57,16 @@ export function useFlakeActions(props: FlakeActionsProps) {
 		}
 
 		props.setInputs(result.data.inputs);
-		props.setDescription(result.data.description);
 		await checkUpdates(result.data.inputs);
 	}
 
-	async function updateSelected() {
-		const selected = props.selectedIndices();
-		if (selected.size === 0) {
+	async function updateSelected(names: string[]) {
+		if (names.length === 0) {
 			props.setStatusMessage("No inputs selected");
 			setTimeout(() => props.setStatusMessage(undefined), 2000);
 			return;
 		}
 
-		const names = Array.from(selected)
-			.map((i) => props.inputs()[i]?.name)
-			.filter((n): n is string => !!n);
 		props.setStatusMessage(`Updating ${names.join(", ")}...`);
 		props.setLoading(true);
 
@@ -82,7 +74,6 @@ export function useFlakeActions(props: FlakeActionsProps) {
 		props.setLoading(false);
 
 		if (result.ok) {
-			props.setSelectedIndices(new Set<number>());
 			await refresh();
 			props.setStatusMessage(`Updated ${names.length} input(s)`);
 		} else {
@@ -100,7 +91,6 @@ export function useFlakeActions(props: FlakeActionsProps) {
 		props.setLoading(false);
 
 		if (result.ok) {
-			props.setSelectedIndices(new Set<number>());
 			await refresh();
 			props.setStatusMessage("All inputs updated");
 		} else {

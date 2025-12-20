@@ -4,21 +4,17 @@ import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { shortcuts } from "../config/shortcuts";
 import { githubService } from "../services/github";
+import type { FlakeStore } from "../stores/flakeStore";
 import { mocha, theme } from "../theme";
 import type { FlakeInput, GitHubCommit } from "../types";
 
 export interface ChangelogViewProps {
+	store: FlakeStore;
 	input: FlakeInput;
-	onBack: () => void;
-	onLockToCommit: (
-		inputName: string,
-		sha: string,
-		owner: string,
-		repo: string,
-	) => Promise<boolean>;
 }
 
 export function ChangelogView(props: ChangelogViewProps) {
+	const { actions } = props.store;
 	let scrollBoxRef: ScrollBoxRenderable | undefined;
 
 	const [commits, setCommits] = createSignal<GitHubCommit[]>([]);
@@ -80,14 +76,14 @@ export function ChangelogView(props: ChangelogViewProps) {
 		const { owner, repo } = props.input;
 		if (!commit || !owner || !repo) return;
 		hideConfirmDialog();
-		const success = await props.onLockToCommit(
+		const success = await actions.lockToCommit(
 			props.input.name,
 			commit.sha,
 			owner,
 			repo,
 		);
 		if (success) {
-			props.onBack();
+			actions.closeChangelog();
 		}
 	}
 
@@ -122,7 +118,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 				break;
 			case "escape":
 			case "q":
-				props.onBack();
+				actions.closeChangelog();
 				break;
 		}
 	});

@@ -1,21 +1,14 @@
 import { useKeyboard } from "@opentui/solid";
-import type { Accessor } from "solid-js";
 import { createSignal, For, Show } from "solid-js";
 import { HelpBar } from "../components/HelpBar";
 import { shortcuts } from "../config/shortcuts";
 import { timeService } from "../services/time";
+import type { FlakeStore } from "../stores/flakeStore";
 import { mocha, theme } from "../theme";
-import type { FlakeInput, UpdateStatus } from "../types";
+import type { FlakeInput } from "../types";
 
 export interface ListViewProps {
-	inputs: Accessor<FlakeInput[]>;
-	updateStatuses: Accessor<Map<string, UpdateStatus>>;
-	statusMessage: Accessor<string | undefined>;
-	loading: Accessor<boolean>;
-	onShowChangelog: (input: FlakeInput) => void;
-	onRefresh: () => void;
-	onUpdateSelected: (names: string[]) => void;
-	onUpdateAll: () => void;
+	store: FlakeStore;
 	onQuit: () => void;
 }
 
@@ -37,13 +30,15 @@ function getTypeBadgeColor(type: FlakeInput["type"]): string {
 }
 
 export function ListView(props: ListViewProps) {
+	const { state, actions } = props.store;
+
 	const [cursorIndex, setCursorIndex] = createSignal(0);
 	const [selectedIndices, setSelectedIndices] = createSignal<Set<number>>(
 		new Set(),
 	);
 
 	function moveCursor(delta: number) {
-		const len = props.inputs().length;
+		const len = state.inputs.length;
 		if (len === 0) return;
 		const prev = cursorIndex();
 		const next = prev + delta;
@@ -53,12 +48,12 @@ export function ListView(props: ListViewProps) {
 	}
 
 	function getCurrentInput() {
-		return props.inputs()[cursorIndex()];
+		return state.inputs[cursorIndex()];
 	}
 
 	function getSelectedNames(): string[] {
 		return Array.from(selectedIndices())
-			.map((i) => props.inputs()[i]?.name)
+			.map((i) => state.inputs[i]?.name)
 			.filter((n): n is string => !!n);
 	}
 
@@ -94,22 +89,22 @@ export function ListView(props: ListViewProps) {
 				break;
 			case "u":
 				if (e.shift) {
-					props.onUpdateAll();
+					actions.updateAll();
 				} else {
 					const names = getSelectedNames();
 					if (names.length > 0) {
-						props.onUpdateSelected(names);
+						actions.updateSelected(names);
 						clearSelection();
 					}
 				}
 				break;
 			case "c": {
 				const input = getCurrentInput();
-				if (input) props.onShowChangelog(input);
+				if (input) actions.showChangelog(input);
 				break;
 			}
 			case "r":
-				props.onRefresh();
+				actions.refresh();
 				break;
 			case "escape":
 			case "q":
@@ -144,7 +139,7 @@ export function ListView(props: ListViewProps) {
 					<text fg={theme.textDim}>STATUS</text>
 				</box>
 
-				<For each={props.inputs()}>
+				<For each={state.inputs}>
 					{(input, index) => {
 						const isSelected = () => selectedIndices().has(index());
 						const isCursor = () => cursorIndex() === index();
@@ -188,7 +183,7 @@ export function ListView(props: ListViewProps) {
 								</box>
 
 								{(() => {
-									const status = props.updateStatuses().get(input.name);
+									const status = state.updateStatuses[input.name];
 									if (!status) return <text fg={theme.textDim}>-</text>;
 									if (status.loading) {
 										return <spinner name="dots" color={theme.textDim} />;
@@ -208,7 +203,7 @@ export function ListView(props: ListViewProps) {
 					}}
 				</For>
 
-				<Show when={props.inputs().length === 0}>
+				<Show when={state.inputs.length === 0}>
 					<box justifyContent="center" paddingTop={2} paddingBottom={2}>
 						<text fg={theme.textMuted}>No flake inputs found</text>
 					</box>
@@ -216,8 +211,8 @@ export function ListView(props: ListViewProps) {
 			</box>
 
 			<HelpBar
-				statusMessage={props.statusMessage}
-				loading={props.loading}
+				statusMessage={() => state.statusMessage}
+				loading={() => state.loading}
 				selectedCount={() => selectedIndices().size}
 				shortcuts={shortcuts.list}
 			/>

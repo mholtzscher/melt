@@ -1,9 +1,9 @@
 import { useRenderer } from "@opentui/solid";
-import { createSignal, onMount, Show } from "solid-js";
-import { useFlakeActions } from "./hooks/useFlakeActions";
+import { onMount, Show } from "solid-js";
 import type { FlakeData } from "./services/flake";
+import { createFlakeStore } from "./stores/flakeStore";
 import { theme } from "./theme";
-import type { FlakeInput, UpdateStatus } from "./types";
+import type { FlakeInput } from "./types";
 import { ChangelogView } from "./views/ChangelogView";
 import { ListView } from "./views/ListView";
 
@@ -13,79 +13,25 @@ export interface AppProps {
 
 export function App(props: AppProps) {
 	const renderer = useRenderer();
-
-	// Flake data state
-	const [inputs, setInputs] = createSignal<FlakeInput[]>(
-		props.initialFlake.inputs,
-	);
-	const flakePath = () => props.initialFlake.path;
-
-	// Update statuses state
-	const [updateStatuses, setUpdateStatuses] = createSignal<
-		Map<string, UpdateStatus>
-	>(new Map());
-
-	// UI state
-	const [loading, setLoading] = createSignal(false);
-	const [statusMessage, setStatusMessage] = createSignal<string | undefined>();
-	const [changelogInput, setChangelogInput] = createSignal<
-		FlakeInput | undefined
-	>();
-
-	const flakeActions = useFlakeActions({
-		flakePath,
-		inputs,
-		setInputs,
-		setUpdateStatuses,
-		setLoading,
-		setStatusMessage,
-	});
+	const { state, actions } = createFlakeStore(props.initialFlake);
 
 	function quit(code = 0) {
 		renderer.destroy();
 		process.exit(code);
 	}
 
-	function showChangelog(input: FlakeInput) {
-		if (input.type !== "github") {
-			setStatusMessage("Changelog only available for GitHub inputs");
-			setTimeout(() => setStatusMessage(undefined), 2000);
-			return;
-		}
-
-		setChangelogInput(input);
-	}
-
-	function closeChangelog() {
-		setChangelogInput(undefined);
-	}
-
 	onMount(() => {
-		flakeActions.checkUpdates(props.initialFlake.inputs);
+		actions.checkUpdates();
 	});
 
 	return (
 		<box flexDirection="column" flexGrow={1} backgroundColor={theme.bg}>
-			<Show when={!changelogInput()}>
-				<ListView
-					inputs={inputs}
-					updateStatuses={updateStatuses}
-					statusMessage={statusMessage}
-					loading={loading}
-					onShowChangelog={showChangelog}
-					onRefresh={flakeActions.refresh}
-					onUpdateSelected={flakeActions.updateSelected}
-					onUpdateAll={flakeActions.updateAll}
-					onQuit={quit}
-				/>
+			<Show when={!state.changelogInput}>
+				<ListView store={{ state, actions }} onQuit={quit} />
 			</Show>
-			<Show when={changelogInput()}>
+			<Show when={state.changelogInput}>
 				{(input: () => FlakeInput) => (
-					<ChangelogView
-						input={input()}
-						onBack={closeChangelog}
-						onLockToCommit={flakeActions.lockToCommit}
-					/>
+					<ChangelogView store={{ state, actions }} input={input()} />
 				)}
 			</Show>
 		</box>

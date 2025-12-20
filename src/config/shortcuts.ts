@@ -1,11 +1,11 @@
-import type { AppView } from "../types";
-
 export interface HelpItem {
 	key: string;
 	description: string;
 }
 
-export const shortcuts: Record<AppView, HelpItem[]> = {
+type ViewType = "list" | "changelog" | "updating";
+
+export const shortcuts: Record<ViewType, HelpItem[]> = {
 	list: [
 		{ key: "j/k", description: "nav" },
 		{ key: "space", description: "select" },

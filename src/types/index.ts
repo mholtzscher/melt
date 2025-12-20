@@ -1,5 +1,3 @@
-import type { Accessor, Setter } from "solid-js";
-
 // Generic result type for operations that can fail
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -73,55 +71,4 @@ export interface UpdateStatus {
 	commitsBehind: number;
 	loading: boolean;
 	error?: string;
-}
-
-// App state types
-export type AppView = "list" | "changelog" | "updating";
-
-// State interfaces (signal-based)
-export interface FlakeState {
-	inputs: Accessor<FlakeInput[]>;
-	setInputs: Setter<FlakeInput[]>;
-	flakePath: Accessor<string>;
-}
-
-export interface ListNavigationState {
-	cursorIndex: Accessor<number>;
-	setCursorIndex: Setter<number>;
-	selectedIndices: Accessor<Set<number>>;
-	setSelectedIndices: Setter<Set<number>>;
-}
-
-export interface UpdateStatusState {
-	updateStatuses: Accessor<Map<string, UpdateStatus>>;
-	setUpdateStatuses: Setter<Map<string, UpdateStatus>>;
-}
-
-export interface UIState {
-	view: Accessor<AppView>;
-	setView: Setter<AppView>;
-	loading: Accessor<boolean>;
-	setLoading: Setter<boolean>;
-	statusMessage: Accessor<string | undefined>;
-	setStatusMessage: Setter<string | undefined>;
-}
-
-export interface ChangelogState {
-	changelogInput: Accessor<FlakeInput | undefined>;
-	setChangelogInput: Setter<FlakeInput | undefined>;
-	commits: Accessor<GitHubCommit[]>;
-	setCommits: Setter<GitHubCommit[]>;
-	lockedIndex: Accessor<number>;
-	setLockedIndex: Setter<number>;
-	changelogCursorIndex: Accessor<number>;
-	setChangelogCursorIndex: Setter<number>;
-	changelogLoading: Accessor<boolean>;
-	setChangelogLoading: Setter<boolean>;
-}
-
-export interface ConfirmDialogState {
-	showConfirm: Accessor<boolean>;
-	setShowConfirm: Setter<boolean>;
-	confirmCommit: Accessor<GitHubCommit | undefined>;
-	setConfirmCommit: Setter<GitHubCommit | undefined>;
 }

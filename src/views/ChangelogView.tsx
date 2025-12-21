@@ -127,11 +127,11 @@ export function ChangelogView(props: ChangelogViewProps) {
 		<box flexDirection="column" flexGrow={1}>
 			<box
 				flexDirection="row"
-				backgroundColor={theme.bgDark}
 				paddingLeft={1}
 				paddingRight={1}
 				flexShrink={0}
-				height={1}
+				borderStyle="single"
+				borderColor={theme.border}
 			>
 				<text fg={theme.accent} attributes={1}>
 					Changelog: {props.input.name}
@@ -161,6 +161,8 @@ export function ChangelogView(props: ChangelogViewProps) {
 						paddingLeft={1}
 						paddingRight={1}
 						overflow="hidden"
+						borderStyle="rounded"
+						borderColor={theme.border}
 					>
 						<box flexDirection="column">
 							<For each={commits()}>
@@ -224,11 +226,11 @@ export function ChangelogView(props: ChangelogViewProps) {
 
 			<box
 				flexDirection="row"
-				backgroundColor={theme.bgDark}
 				paddingLeft={1}
 				paddingRight={1}
 				flexShrink={0}
-				height={1}
+				borderStyle="single"
+				borderColor={theme.border}
 			>
 				<For each={shortcuts.changelog}>
 					{(item) => (

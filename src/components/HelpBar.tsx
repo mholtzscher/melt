@@ -28,9 +28,10 @@ export function HelpBar(props: HelpBarProps) {
 	return (
 		<box
 			flexDirection="row"
-			backgroundColor={theme.bgDark}
 			paddingLeft={1}
 			paddingRight={1}
+			borderStyle="single"
+			borderColor={theme.border}
 		>
 			<Show when={props.shortcuts.length > 0}>
 				<box flexDirection="row">

@@ -119,7 +119,14 @@ export function ListView(props: ListViewProps) {
 
 	return (
 		<box flexDirection="column" flexGrow={1}>
-			<box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1}>
+			<box
+				flexDirection="column"
+				flexGrow={1}
+				paddingLeft={1}
+				paddingRight={1}
+				borderStyle="rounded"
+				borderColor={theme.border}
+			>
 				<box flexDirection="row">
 					<box width={5}>
 						<text fg={theme.textDim}> </text>

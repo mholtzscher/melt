@@ -30,7 +30,14 @@ export function ChangelogView(props: ChangelogViewProps) {
 	createEffect(() => {
 		const cursor = cursorIndex();
 		if (scrollBoxRef) {
-			scrollBoxRef.scrollTop = Math.max(0, cursor - 5);
+			const viewportHeight = scrollBoxRef.height ?? 10;
+			const scrollTop = scrollBoxRef.scrollTop ?? 0;
+			if (cursor >= scrollTop + viewportHeight) {
+				scrollBoxRef.scrollTop = cursor - viewportHeight + 1;
+			}
+			if (cursor < scrollTop) {
+				scrollBoxRef.scrollTop = cursor;
+			}
 		}
 	});
 
@@ -132,7 +139,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 				paddingLeft={1}
 				paddingRight={1}
 				flexShrink={0}
-				borderStyle="single"
+				borderStyle="rounded"
 				borderColor={theme.border}
 			>
 				<text fg={theme.accent} attributes={1}>
@@ -156,73 +163,79 @@ export function ChangelogView(props: ChangelogViewProps) {
 						</box>
 					}
 				>
-					<scrollbox
-						ref={scrollBoxRef}
+					<box
 						flexGrow={1}
 						flexShrink={1}
-						paddingLeft={1}
-						paddingRight={1}
-						overflow="hidden"
 						borderStyle="rounded"
 						borderColor={theme.border}
 					>
-						<box flexDirection="column">
-							<For each={commits()}>
-								{(commit, index) => {
-									const isCursor = () => cursorIndex() === index();
-									const isLocked = () => commit.isLocked === true;
+						<scrollbox
+							ref={scrollBoxRef}
+							flexGrow={1}
+							paddingLeft={1}
+							paddingRight={1}
+							overflow="hidden"
+						>
+							<box flexDirection="column">
+								<For each={commits()}>
+									{(commit, index) => {
+										const isCursor = () => cursorIndex() === index();
+										const isLocked = () => commit.isLocked === true;
 
-									return (
-										<box
-											flexDirection="row"
-											backgroundColor={
-												isCursor() ? theme.bgHighlight : undefined
-											}
-										>
-											<box width={3}>
-												<text fg={theme.warning}>
-													{isLocked() ? "\u{1F512}" : "  "}
-												</text>
-											</box>
-
-											<box width={9}>
-												<text fg={isLocked() ? theme.warning : theme.sha}>
-													{commit.shortSha}
-												</text>
-											</box>
-
-											<box width={16}>
-												<text fg={theme.info}>
-													{commit.author.length > 14
-														? `${commit.author.substring(0, 14)}..`
-														: commit.author.padEnd(14)}
-												</text>
-											</box>
-
-											<box width={10}>
-												<text fg={theme.textDim}>{commit.date.padEnd(8)}</text>
-											</box>
-
-											<text
-												fg={
-													isCursor()
-														? theme.cursor
-														: isLocked()
-															? theme.warning
-															: theme.text
+										return (
+											<box
+												flexDirection="row"
+												backgroundColor={
+													isCursor() ? theme.bgHighlight : undefined
 												}
-												attributes={isCursor() || isLocked() ? 1 : 0}
 											>
-												{commit.message.length > 55
-													? `${commit.message.substring(0, 55)}...`
-													: commit.message}
-											</text>
-										</box>
-									);
-								}}
-							</For>
-						</box>
-					</scrollbox>
+												<box width={3}>
+													<text fg={theme.warning}>
+														{isLocked() ? "\u{1F512}" : "  "}
+													</text>
+												</box>
+
+												<box width={9}>
+													<text fg={isLocked() ? theme.warning : theme.sha}>
+														{commit.shortSha}
+													</text>
+												</box>
+
+												<box width={16}>
+													<text fg={theme.info}>
+														{commit.author.length > 14
+															? `${commit.author.substring(0, 14)}..`
+															: commit.author.padEnd(14)}
+													</text>
+												</box>
+
+												<box width={10}>
+													<text fg={theme.textDim}>
+														{commit.date.padEnd(8)}
+													</text>
+												</box>
+
+												<text
+													fg={
+														isCursor()
+															? theme.cursor
+															: isLocked()
+																? theme.warning
+																: theme.text
+													}
+													attributes={isCursor() || isLocked() ? 1 : 0}
+												>
+													{commit.message.length > 55
+														? `${commit.message.substring(0, 55)}...`
+														: commit.message}
+												</text>
+											</box>
+										);
+									}}
+								</For>
+							</box>
+						</scrollbox>
+					</box>
 				</Show>
 			</Show>
 

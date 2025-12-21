@@ -1,5 +1,6 @@
+import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
-import { createSignal, For, Match, Show, Switch } from "solid-js";
+import { createEffect, createSignal, For, Match, Show, Switch } from "solid-js";
 import { HelpBar } from "../components/HelpBar";
 import { shortcuts } from "../config/shortcuts";
 import { timeService } from "../services/time";
@@ -144,11 +145,26 @@ function getTypeBadgeColor(type: FlakeInput["type"]): string {
 
 export function ListView(props: ListViewProps) {
 	const { state, actions } = props.store;
+	let scrollBoxRef: ScrollBoxRenderable | undefined;
 
 	const [cursorIndex, setCursorIndex] = createSignal(0);
 	const [selectedIndices, setSelectedIndices] = createSignal<Set<number>>(
 		new Set(),
 	);
+
+	createEffect(() => {
+		const cursor = cursorIndex();
+		if (scrollBoxRef) {
+			const viewportHeight = scrollBoxRef.height ?? 10;
+			const scrollTop = scrollBoxRef.scrollTop ?? 0;
+			if (cursor >= scrollTop + viewportHeight) {
+				scrollBoxRef.scrollTop = cursor - viewportHeight + 1;
+			}
+			if (cursor < scrollTop) {
+				scrollBoxRef.scrollTop = cursor;
+			}
+		}
+	});
 
 	function moveCursor(delta: number) {
 		const len = state.inputs.length;
@@ -230,31 +246,48 @@ export function ListView(props: ListViewProps) {
 		<box flexDirection="column" flexGrow={1}>
 			<box
 				flexDirection="column"
-				flexGrow={1}
 				paddingLeft={1}
 				paddingRight={1}
+				flexShrink={0}
 				borderStyle="rounded"
 				borderColor={theme.border}
 			>
 				<TableHeader />
+			</box>
 
-				<For each={state.inputs}>
-					{(input, index) => (
-						<FlakeRow
-							input={input}
-							index={index()}
-							isSelected={selectedIndices().has(index())}
-							isCursor={cursorIndex() === index()}
-							status={state.updateStatuses[input.name]}
-						/>
-					)}
-				</For>
+			<box
+				flexGrow={1}
+				flexShrink={1}
+				borderStyle="rounded"
+				borderColor={theme.border}
+			>
+				<scrollbox
+					ref={scrollBoxRef}
+					flexGrow={1}
+					paddingLeft={1}
+					paddingRight={1}
+					overflow="hidden"
+				>
+					<box flexDirection="column">
+						<For each={state.inputs}>
+							{(input, index) => (
+								<FlakeRow
+									input={input}
+									index={index()}
+									isSelected={selectedIndices().has(index())}
+									isCursor={cursorIndex() === index()}
+									status={state.updateStatuses[input.name]}
+								/>
+							)}
+						</For>
 
-				<Show when={state.inputs.length === 0}>
-					<box justifyContent="center" paddingTop={2} paddingBottom={2}>
-						<text fg={theme.textMuted}>No flake inputs found</text>
+						<Show when={state.inputs.length === 0}>
+							<box justifyContent="center" paddingTop={2} paddingBottom={2}>
+								<text fg={theme.textMuted}>No flake inputs found</text>
+							</box>
+						</Show>
 					</box>
-				</Show>
+				</scrollbox>
 			</box>
 
 			<HelpBar

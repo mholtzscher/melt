@@ -31,7 +31,7 @@ export function HelpBar(props: HelpBarProps) {
 			paddingLeft={1}
 			paddingRight={1}
 			flexShrink={0}
-			borderStyle="single"
+			borderStyle="rounded"
 			borderColor={theme.border}
 		>
 			<Show when={props.shortcuts.length > 0}>

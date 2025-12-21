@@ -1,15 +1,125 @@
 import { useKeyboard } from "@opentui/solid";
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, Match, Show, Switch } from "solid-js";
 import { HelpBar } from "../components/HelpBar";
 import { shortcuts } from "../config/shortcuts";
 import { timeService } from "../services/time";
 import type { FlakeStore } from "../stores/flakeStore";
 import { theme } from "../theme";
-import type { FlakeInput } from "../types";
+import type { FlakeInput, UpdateStatus } from "../types";
+
+const columns = {
+	checkbox: 5,
+	name: 35,
+	type: 12,
+	rev: 10,
+	updated: 14,
+	typePadding: 10,
+} as const;
 
 export interface ListViewProps {
 	store: FlakeStore;
 	onQuit: () => void;
+}
+
+interface StatusCellProps {
+	status: UpdateStatus | undefined;
+}
+
+function StatusCell(props: StatusCellProps) {
+	return (
+		<Switch fallback={<text fg={theme.textDim}>ok</text>}>
+			<Match when={!props.status}>
+				<text fg={theme.textDim}>-</text>
+			</Match>
+			<Match when={props.status?.loading}>
+				<spinner name="dots" color={theme.textDim} />
+			</Match>
+			<Match when={props.status?.error}>
+				<text fg={theme.warning}>?</text>
+			</Match>
+			<Match when={props.status?.hasUpdate}>
+				<text fg={theme.success}>+{props.status?.commitsBehind}</text>
+			</Match>
+		</Switch>
+	);
+}
+
+interface FlakeRowProps {
+	input: FlakeInput;
+	index: number;
+	isSelected: boolean;
+	isCursor: boolean;
+	status: UpdateStatus | undefined;
+}
+
+function FlakeRow(props: FlakeRowProps) {
+	const badgeColor = getTypeBadgeColor(props.input.type);
+
+	return (
+		<box
+			flexDirection="row"
+			backgroundColor={props.isCursor ? theme.bgHighlight : undefined}
+		>
+			<box width={columns.checkbox}>
+				<text
+					fg={props.isSelected ? theme.selected : theme.textDim}
+					attributes={props.isSelected ? 1 : 0}
+				>
+					{props.isSelected ? "[x] " : "[ ] "}
+				</text>
+			</box>
+
+			<box width={columns.name}>
+				<text
+					fg={props.isCursor ? theme.cursor : theme.text}
+					attributes={props.isCursor ? 1 : 0}
+				>
+					{props.input.name}
+				</text>
+			</box>
+
+			<box width={columns.type}>
+				<text fg={badgeColor}>
+					{props.input.type.padEnd(columns.typePadding)}
+				</text>
+			</box>
+
+			<box width={columns.rev}>
+				<text fg={theme.accent}>{props.input.shortRev}</text>
+			</box>
+
+			<box width={columns.updated}>
+				<text fg={theme.textMuted}>
+					{timeService.formatRelativeTime(props.input.lastModified)}
+				</text>
+			</box>
+
+			<StatusCell status={props.status} />
+		</box>
+	);
+}
+
+function TableHeader() {
+	return (
+		<box flexDirection="row">
+			<box width={columns.checkbox}>
+				<text fg={theme.textDim}> </text>
+			</box>
+			<box width={columns.name}>
+				<text fg={theme.textDim}>NAME</text>
+			</box>
+			<box width={columns.type}>
+				<text fg={theme.textDim}>TYPE</text>
+			</box>
+			<box width={columns.rev}>
+				<text fg={theme.textDim}>REV</text>
+			</box>
+			<box width={columns.updated}>
+				<text fg={theme.textDim}>UPDATED</text>
+			</box>
+			<text fg={theme.textDim}>STATUS</text>
+		</box>
+	);
 }
 
 function getTypeBadgeColor(type: FlakeInput["type"]): string {
@@ -72,22 +182,24 @@ export function ListView(props: ListViewProps) {
 		setSelectedIndices(new Set<number>());
 	}
 
+	function handleQuit() {
+		if (selectedIndices().size > 0) {
+			clearSelection();
+		} else {
+			props.onQuit();
+		}
+	}
+
 	useKeyboard((e) => {
 		if (e.eventType === "release") return;
 
-		switch (e.name) {
-			case "j":
-			case "down":
-				moveCursor(1);
-				break;
-			case "k":
-			case "up":
-				moveCursor(-1);
-				break;
-			case "space":
-				toggleSelection();
-				break;
-			case "u":
+		const keyActions: Record<string, () => void> = {
+			j: () => moveCursor(1),
+			down: () => moveCursor(1),
+			k: () => moveCursor(-1),
+			up: () => moveCursor(-1),
+			space: toggleSelection,
+			u: () => {
 				if (e.shift) {
 					actions.updateAll();
 				} else {
@@ -97,24 +209,18 @@ export function ListView(props: ListViewProps) {
 						clearSelection();
 					}
 				}
-				break;
-			case "c": {
+			},
+			c: () => {
 				const input = getCurrentInput();
 				if (input) actions.showChangelog(input);
-				break;
-			}
-			case "r":
-				actions.refresh();
-				break;
-			case "escape":
-			case "q":
-				if (selectedIndices().size > 0) {
-					clearSelection();
-				} else {
-					props.onQuit();
-				}
-				break;
-		}
+			},
+			r: () => actions.refresh(),
+			escape: handleQuit,
+			q: handleQuit,
+		};
+
+		const action = keyActions[e.name];
+		if (action) action();
 	});
 
 	return (
@@ -127,87 +233,18 @@ export function ListView(props: ListViewProps) {
 				borderStyle="rounded"
 				borderColor={theme.border}
 			>
-				<box flexDirection="row">
-					<box width={5}>
-						<text fg={theme.textDim}> </text>
-					</box>
-					<box width={35}>
-						<text fg={theme.textDim}>NAME</text>
-					</box>
-					<box width={12}>
-						<text fg={theme.textDim}>TYPE</text>
-					</box>
-					<box width={10}>
-						<text fg={theme.textDim}>REV</text>
-					</box>
-					<box width={14}>
-						<text fg={theme.textDim}>UPDATED</text>
-					</box>
-					<text fg={theme.textDim}>STATUS</text>
-				</box>
+				<TableHeader />
 
 				<For each={state.inputs}>
-					{(input, index) => {
-						const isSelected = () => selectedIndices().has(index());
-						const isCursor = () => cursorIndex() === index();
-						const badgeColor = getTypeBadgeColor(input.type);
-
-						return (
-							<box
-								flexDirection="row"
-								backgroundColor={isCursor() ? theme.bgHighlight : undefined}
-							>
-								<box width={5}>
-									<text
-										fg={isSelected() ? theme.selected : theme.textDim}
-										attributes={isSelected() ? 1 : 0}
-									>
-										{isSelected() ? "[x] " : "[ ] "}
-									</text>
-								</box>
-
-								<box width={35}>
-									<text
-										fg={isCursor() ? theme.cursor : theme.text}
-										attributes={isCursor() ? 1 : 0}
-									>
-										{input.name}
-									</text>
-								</box>
-
-								<box width={12}>
-									<text fg={badgeColor}>{input.type.padEnd(10)}</text>
-								</box>
-
-								<box width={10}>
-									<text fg={theme.accent}>{input.shortRev}</text>
-								</box>
-
-								<box width={14}>
-									<text fg={theme.textMuted}>
-										{timeService.formatRelativeTime(input.lastModified)}
-									</text>
-								</box>
-
-								{(() => {
-									const status = state.updateStatuses[input.name];
-									if (!status) return <text fg={theme.textDim}>-</text>;
-									if (status.loading) {
-										return <spinner name="dots" color={theme.textDim} />;
-									}
-									if (status.error) {
-										return <text fg={theme.warning}>?</text>;
-									}
-									if (status.hasUpdate) {
-										return (
-											<text fg={theme.success}>+{status.commitsBehind}</text>
-										);
-									}
-									return <text fg={theme.textDim}>ok</text>;
-								})()}
-							</box>
-						);
-					}}
+					{(input, index) => (
+						<FlakeRow
+							input={input}
+							index={index()}
+							isSelected={selectedIndices().has(index())}
+							isCursor={cursorIndex() === index()}
+							status={state.updateStatuses[input.name]}
+						/>
+					)}
 				</For>
 
 				<Show when={state.inputs.length === 0}>

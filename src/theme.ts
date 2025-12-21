@@ -1,5 +1,5 @@
 // Catppuccin Mocha color palette
-export const mocha = {
+const catppuccin_mocha = {
 	// Accent colors
 	rosewater: "#f5e0dc",
 	flamingo: "#f2cdcd",
@@ -29,42 +29,46 @@ export const mocha = {
 	base: "#1e1e2e",
 	mantle: "#181825",
 	crust: "#11111b",
-} as const;
+};
 
 // Semantic color mappings for the UI
 export const theme = {
 	// Background colors
-	bg: mocha.base,
-	bgDark: mocha.mantle,
-	bgDarker: mocha.crust,
-	bgHighlight: mocha.surface0,
+	bg: catppuccin_mocha.base,
+	bgDark: catppuccin_mocha.mantle,
+	bgDarker: catppuccin_mocha.crust,
+	bgHighlight: catppuccin_mocha.surface0,
 
 	// Text colors
-	text: mocha.text,
-	textMuted: mocha.subtext0,
-	textDim: mocha.overlay1,
+	text: catppuccin_mocha.text,
+	textMuted: catppuccin_mocha.subtext0,
+	textDim: catppuccin_mocha.overlay1,
 
 	// UI element colors
-	border: mocha.surface1,
-	borderFocus: mocha.lavender,
+	border: catppuccin_mocha.surface1,
+	borderFocus: catppuccin_mocha.lavender,
 
 	// Status colors
-	success: mocha.green,
-	warning: mocha.yellow,
-	error: mocha.red,
-	info: mocha.blue,
+	success: catppuccin_mocha.green,
+	warning: catppuccin_mocha.yellow,
+	error: catppuccin_mocha.red,
+	info: catppuccin_mocha.blue,
 
 	// Accent colors for different elements
-	accent: mocha.mauve,
-	accentAlt: mocha.lavender,
-	selected: mocha.green,
-	cursor: mocha.rosewater,
+	accent: catppuccin_mocha.mauve,
+	accentAlt: catppuccin_mocha.lavender,
+	selected: catppuccin_mocha.green,
+	cursor: catppuccin_mocha.rosewater,
 
 	// Type badges
-	github: mocha.peach,
-	gitlab: mocha.flamingo,
-	sourcehut: mocha.teal,
-	path: mocha.sky,
-	git: mocha.pink,
-	other: mocha.overlay1,
+	github: catppuccin_mocha.peach,
+	gitlab: catppuccin_mocha.flamingo,
+	sourcehut: catppuccin_mocha.teal,
+	path: catppuccin_mocha.sky,
+	git: catppuccin_mocha.pink,
+	other: catppuccin_mocha.overlay1,
+
+	// Misc
+	key: catppuccin_mocha.lavender,
+	sha: catppuccin_mocha.peach,
 } as const;

@@ -4,7 +4,7 @@ import { HelpBar } from "../components/HelpBar";
 import { shortcuts } from "../config/shortcuts";
 import { timeService } from "../services/time";
 import type { FlakeStore } from "../stores/flakeStore";
-import { mocha, theme } from "../theme";
+import { theme } from "../theme";
 import type { FlakeInput } from "../types";
 
 export interface ListViewProps {
@@ -189,11 +189,11 @@ export function ListView(props: ListViewProps) {
 										return <spinner name="dots" color={theme.textDim} />;
 									}
 									if (status.error) {
-										return <text fg={mocha.yellow}>?</text>;
+										return <text fg={theme.warning}>?</text>;
 									}
 									if (status.hasUpdate) {
 										return (
-											<text fg={mocha.green}>+{status.commitsBehind}</text>
+											<text fg={theme.success}>+{status.commitsBehind}</text>
 										);
 									}
 									return <text fg={theme.textDim}>ok</text>;

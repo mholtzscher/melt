@@ -5,7 +5,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { shortcuts } from "../config/shortcuts";
 import { githubService } from "../services/github";
 import type { FlakeStore } from "../stores/flakeStore";
-import { mocha, theme } from "../theme";
+import { theme } from "../theme";
 import type { FlakeInput, GitHubCommit } from "../types";
 
 export interface ChangelogViewProps {
@@ -176,19 +176,19 @@ export function ChangelogView(props: ChangelogViewProps) {
 											}
 										>
 											<box width={3}>
-												<text fg={mocha.yellow}>
+												<text fg={theme.warning}>
 													{isLocked() ? "\u{1F512}" : "  "}
 												</text>
 											</box>
 
 											<box width={9}>
-												<text fg={isLocked() ? mocha.yellow : mocha.peach}>
+												<text fg={isLocked() ? theme.warning : theme.sha}>
 													{commit.shortSha}
 												</text>
 											</box>
 
 											<box width={16}>
-												<text fg={mocha.blue}>
+												<text fg={theme.info}>
 													{commit.author.length > 14
 														? `${commit.author.substring(0, 14)}..`
 														: commit.author.padEnd(14)}
@@ -204,7 +204,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 													isCursor()
 														? theme.cursor
 														: isLocked()
-															? mocha.yellow
+															? theme.warning
 															: theme.text
 												}
 												attributes={isCursor() || isLocked() ? 1 : 0}
@@ -233,7 +233,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 				<For each={shortcuts.changelog}>
 					{(item) => (
 						<>
-							<text fg={mocha.lavender}>{item.key}</text>
+							<text fg={theme.key}>{item.key}</text>
 							<text fg={theme.textDim}> {item.description} </text>
 						</>
 					)}
@@ -241,8 +241,8 @@ export function ChangelogView(props: ChangelogViewProps) {
 
 				<box flexGrow={1} />
 
-				<text fg={mocha.green}>+{lockedIndex()} new</text>
-				<text fg={mocha.yellow}> {"\u{1F512}"} </text>
+				<text fg={theme.success}>+{lockedIndex()} new</text>
+				<text fg={theme.warning}> {"\u{1F512}"} </text>
 				<text fg={theme.textMuted}>
 					{commits().length - lockedIndex() - 1} older
 				</text>

@@ -1,7 +1,7 @@
 import type { Accessor } from "solid-js";
 import { For, Show } from "solid-js";
 import type { HelpItem } from "../config/shortcuts";
-import { mocha, theme } from "../theme";
+import { theme } from "../theme";
 
 export interface HelpBarProps {
 	statusMessage: Accessor<string | undefined>;
@@ -25,7 +25,7 @@ export function HelpBar(props: HelpBarProps) {
 						<For each={props.shortcuts}>
 							{(item) => (
 								<>
-									<text fg={mocha.lavender}>{item.key}</text>
+									<text fg={theme.key}>{item.key}</text>
 									<text fg={theme.textDim}> {item.description} </text>
 								</>
 							)}

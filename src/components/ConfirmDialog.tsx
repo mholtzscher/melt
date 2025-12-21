@@ -1,6 +1,6 @@
 import type { Accessor } from "solid-js";
 import { Show } from "solid-js";
-import { mocha, theme } from "../theme";
+import { theme } from "../theme";
 import type { GitHubCommit } from "../types";
 
 export interface ConfirmDialogProps {
@@ -11,11 +11,8 @@ export interface ConfirmDialogProps {
 
 export function ConfirmDialog(props: ConfirmDialogProps) {
 	const commitMessage = () => {
-		const c = props.commit();
-		if (!c?.message) return "";
-		return c.message.length > 40
-			? `${c.message.substring(0, 40)}...`
-			: c.message;
+		const msg = props.commit()?.message;
+		return msg && msg.length > 40 ? `${msg.substring(0, 40)}...` : (msg ?? "");
 	};
 
 	return (
@@ -37,25 +34,18 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
 					padding={1}
 					minWidth={45}
 				>
-					<box height={1} flexDirection="row">
-						<text fg={theme.text} attributes={1}>
-							Lock {props.inputName()} to {props.commit()?.shortSha}?
-						</text>
-					</box>
+					<text fg={theme.text} attributes={1}>
+						Lock {props.inputName()} to {props.commit()?.shortSha}?
+					</text>
 
 					<box height={1} marginTop={1}>
 						<text fg={theme.textDim}>{commitMessage()}</text>
 					</box>
 
-					<box
-						height={1}
-						marginTop={1}
-						flexDirection="row"
-						justifyContent="center"
-					>
-						<text fg={mocha.green}>[y]</text>
+					<box marginTop={1} flexDirection="row" justifyContent="center">
+						<text fg={theme.success}>y</text>
 						<text fg={theme.textDim}> confirm </text>
-						<text fg={mocha.red}>[n/q]</text>
+						<text fg={theme.error}>n/q</text>
 						<text fg={theme.textDim}> cancel</text>
 					</box>
 				</box>

@@ -152,7 +152,6 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 
 		if (result.ok) {
 			setStatusMessage(`Locked ${inputName} to ${sha.substring(0, 7)}`, 3000);
-			await refresh();
 			return true;
 		}
 		setStatusMessage(`Error: ${result.error}`, 3000);

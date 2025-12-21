@@ -85,6 +85,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 		);
 		if (success) {
 			actions.closeChangelog();
+			actions.refresh();
 		}
 	}
 

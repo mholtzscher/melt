@@ -44,11 +44,19 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 	});
 
 	let isCheckingUpdates = false;
+	let statusTimeout: ReturnType<typeof setTimeout> | undefined;
 
 	function setStatusMessage(message: string | undefined, timeout?: number) {
+		if (statusTimeout) {
+			clearTimeout(statusTimeout);
+			statusTimeout = undefined;
+		}
 		setState("statusMessage", message);
 		if (message && timeout) {
-			setTimeout(() => setState("statusMessage", undefined), timeout);
+			statusTimeout = setTimeout(() => {
+				setState("statusMessage", undefined);
+				statusTimeout = undefined;
+			}, timeout);
 		}
 	}
 

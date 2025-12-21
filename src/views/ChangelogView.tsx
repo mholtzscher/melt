@@ -2,6 +2,7 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
 import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { HelpBar } from "../components/HelpBar";
 import { shortcuts } from "../config/shortcuts";
 import { githubService } from "../services/github";
 import type { FlakeStore } from "../stores/flakeStore";
@@ -14,7 +15,7 @@ export interface ChangelogViewProps {
 }
 
 export function ChangelogView(props: ChangelogViewProps) {
-	const { actions } = props.store;
+	const { state, actions } = props.store;
 	let scrollBoxRef: ScrollBoxRenderable | undefined;
 
 	const [commits, setCommits] = createSignal<GitHubCommit[]>([]);
@@ -224,31 +225,19 @@ export function ChangelogView(props: ChangelogViewProps) {
 				</Show>
 			</Show>
 
-			<box
-				flexDirection="row"
-				paddingLeft={1}
-				paddingRight={1}
-				flexShrink={0}
-				borderStyle="single"
-				borderColor={theme.border}
+			<HelpBar
+				statusMessage={() => state.statusMessage}
+				loading={() => state.loading}
+				shortcuts={shortcuts.changelog}
 			>
-				<For each={shortcuts.changelog}>
-					{(item) => (
-						<>
-							<text fg={theme.key}>{item.key}</text>
-							<text fg={theme.textDim}> {item.description} </text>
-						</>
-					)}
-				</For>
-
-				<box flexGrow={1} />
-
-				<text fg={theme.success}>+{lockedIndex()} new</text>
-				<text fg={theme.warning}> {"\u{1F512}"} </text>
-				<text fg={theme.textMuted}>
-					{commits().length - lockedIndex() - 1} older
-				</text>
-			</box>
+				<box flexDirection="row" marginLeft={2}>
+					<text fg={theme.success}>+{lockedIndex()} new</text>
+					<text fg={theme.warning}> {"\u{1F512}"} </text>
+					<text fg={theme.textMuted}>
+						{commits().length - lockedIndex() - 1} older
+					</text>
+				</box>
+			</HelpBar>
 
 			<ConfirmDialog
 				visible={showConfirm}

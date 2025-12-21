@@ -257,9 +257,14 @@ export function ListView(props: ListViewProps) {
 			<HelpBar
 				statusMessage={() => state.statusMessage}
 				loading={() => state.loading}
-				selectedCount={() => selectedIndices().size}
 				shortcuts={shortcuts.list}
-			/>
+			>
+				<Show when={selectedIndices().size > 0}>
+					<box marginLeft={2}>
+						<text fg={theme.selected}>{selectedIndices().size} selected</text>
+					</box>
+				</Show>
+			</HelpBar>
 		</box>
 	);
 }

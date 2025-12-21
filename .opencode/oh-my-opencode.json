@@ -9,10 +9,10 @@
 			"model": "opencode/grok-code"
 		},
 		"frontend-ui-ux-engineer": {
-			"model": "opencode/gemini-3-pro"
+			"model": "opencode/gemini-3-flash"
 		},
 		"document-writer": {
-			"model": "opencode/gemini-3-pro"
+			"model": "opencode/gemini-3-flash"
 		},
 		"multimodal-looker": {
 			"model": "opencode/gemini-3-flash"

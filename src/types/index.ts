@@ -22,28 +22,6 @@ export interface FlakeInput {
 	lastModified: number;
 }
 
-// GitHub types for changelog
-export interface GitHubCommit {
-	sha: string;
-	shortSha: string;
-	message: string;
-	author: string;
-	date: string;
-	url: string;
-	isLocked?: boolean;
-}
-
-// Update status for flake inputs
-export interface UpdateStatus {
-	hasUpdate: boolean;
-	commitsBehind: number;
-	loading: boolean;
-	error?: string;
-}
-
-// App state types
-export type AppView = "list" | "changelog" | "updating";
-
 // Utility type for nix flake metadata JSON response
 export interface NixFlakeMetadataResponse {
 	description?: string;
@@ -74,4 +52,23 @@ export interface NixFlakeMetadataResponse {
 		>;
 		root: string;
 	};
+}
+
+// GitHub types for changelog
+export interface GitHubCommit {
+	sha: string;
+	shortSha: string;
+	message: string;
+	author: string;
+	date: string;
+	url: string;
+	isLocked?: boolean;
+}
+
+// Update status for flake inputs
+export interface UpdateStatus {
+	hasUpdate: boolean;
+	commitsBehind: number;
+	loading: boolean;
+	error?: string;
 }

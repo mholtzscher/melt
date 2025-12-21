@@ -108,7 +108,28 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		setStatusMessage(`Updating ${names.join(", ")}...`);
 		setState("loading", true);
 
+		for (const name of names) {
+			setState("updateStatuses", name, (prev) => ({
+				...prev,
+				hasUpdate: prev?.hasUpdate ?? false,
+				commitsBehind: prev?.commitsBehind ?? 0,
+				loading: prev?.loading ?? false,
+				updating: true,
+			}));
+		}
+
 		const result = await flakeService.updateInputs(state.path, names);
+
+		for (const name of names) {
+			setState("updateStatuses", name, (prev) => ({
+				...prev,
+				hasUpdate: prev?.hasUpdate ?? false,
+				commitsBehind: prev?.commitsBehind ?? 0,
+				loading: prev?.loading ?? false,
+				updating: false,
+			}));
+		}
+
 		setState("loading", false);
 
 		if (result.ok) {
@@ -123,7 +144,28 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		setStatusMessage("Updating all inputs...");
 		setState("loading", true);
 
+		for (const input of state.inputs) {
+			setState("updateStatuses", input.name, (prev) => ({
+				...prev,
+				hasUpdate: prev?.hasUpdate ?? false,
+				commitsBehind: prev?.commitsBehind ?? 0,
+				loading: prev?.loading ?? false,
+				updating: true,
+			}));
+		}
+
 		const result = await flakeService.updateAll(state.path);
+
+		for (const input of state.inputs) {
+			setState("updateStatuses", input.name, (prev) => ({
+				...prev,
+				hasUpdate: prev?.hasUpdate ?? false,
+				commitsBehind: prev?.commitsBehind ?? 0,
+				loading: prev?.loading ?? false,
+				updating: false,
+			}));
+		}
+
 		setState("loading", false);
 
 		if (result.ok) {

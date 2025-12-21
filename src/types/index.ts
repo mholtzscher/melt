@@ -70,5 +70,6 @@ export interface UpdateStatus {
 	hasUpdate: boolean;
 	commitsBehind: number;
 	loading: boolean;
+	updating?: boolean;
 	error?: string;
 }

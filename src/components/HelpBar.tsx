@@ -3,11 +3,25 @@ import { For, Show } from "solid-js";
 import type { HelpItem } from "../config/shortcuts";
 import { theme } from "../theme";
 
+interface ShortcutItemProps {
+	key: string;
+	description: string;
+}
+
+function ShortcutItem(props: ShortcutItemProps) {
+	return (
+		<box flexDirection="row" marginRight={1}>
+			<text fg={theme.key}>{props.key}</text>
+			<text fg={theme.textDim}> {props.description} </text>
+		</box>
+	);
+}
+
 export interface HelpBarProps {
 	statusMessage: Accessor<string | undefined>;
 	loading: Accessor<boolean>;
 	selectedCount: Accessor<number>;
-	shortcuts: HelpItem[];
+	shortcuts: readonly HelpItem[];
 }
 
 export function HelpBar(props: HelpBarProps) {
@@ -18,25 +32,29 @@ export function HelpBar(props: HelpBarProps) {
 			paddingLeft={1}
 			paddingRight={1}
 		>
-			<Show
-				when={props.statusMessage()}
-				fallback={
-					<box flexDirection="row" flexGrow={1}>
-						<For each={props.shortcuts}>
-							{(item) => (
-								<>
-									<text fg={theme.key}>{item.key}</text>
-									<text fg={theme.textDim}> {item.description} </text>
-								</>
-							)}
-						</For>
-					</box>
-				}
-			>
-				<text fg={props.loading() ? theme.warning : theme.info}>
-					{props.statusMessage()}
-				</text>
+			<Show when={props.shortcuts.length > 0}>
+				<box flexDirection="row">
+					<For each={props.shortcuts}>
+						{(item) => (
+							<ShortcutItem key={item.key} description={item.description} />
+						)}
+					</For>
+				</box>
 			</Show>
+
+			<Show when={props.shortcuts.length > 0 && props.statusMessage()}>
+				<box marginRight={1}>
+					<text fg={theme.textDim}>│</text>
+				</box>
+			</Show>
+
+			<box flexGrow={1} flexShrink={1} overflow="hidden">
+				<Show when={props.statusMessage()}>
+					<text fg={props.loading() ? theme.warning : theme.info}>
+						{props.statusMessage()}
+					</text>
+				</Show>
+			</box>
 
 			<Show when={props.selectedCount() > 0}>
 				<box marginLeft={2}>

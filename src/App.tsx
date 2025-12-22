@@ -67,7 +67,7 @@ export function App(props: AppProps) {
 	const renderer = useRenderer();
 
 	const [flakeData] = createResource(
-		() => props.flakePath,
+		() => props.flakePath ?? ".",
 		async (flakePath) => {
 			const result = await flakeService.load(flakePath);
 			if (!result.ok) {

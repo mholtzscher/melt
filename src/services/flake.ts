@@ -27,9 +27,6 @@ export interface FlakeData {
 	inputs: FlakeInput[];
 }
 
-/**
- * Resolve a path argument to a flake directory
- */
 function resolveFlakePath(path: string): string {
 	const resolved = resolve(path);
 	if (resolved.endsWith("flake.nix")) {
@@ -38,16 +35,10 @@ function resolveFlakePath(path: string): string {
 	return resolved;
 }
 
-/**
- * Check if a flake.nix exists in the given path
- */
 function hasFlakeNix(path: string = "."): Promise<boolean> {
 	return Bun.file(`${path}/flake.nix`).exists();
 }
 
-/**
- * Determine the input type from the locked/original data
- */
 function getInputType(
 	locked?: { type: string },
 	original?: { type: string },
@@ -70,9 +61,6 @@ function getInputType(
 	}
 }
 
-/**
- * Get the URL string for an input
- */
 function getInputUrl(
 	locked?: {
 		type: string;
@@ -108,9 +96,6 @@ function getInputUrl(
 	}
 }
 
-/**
- * Parse nix flake metadata response into FlakeInput array
- */
 function parseInputs(data: NixFlakeMetadataResponse): FlakeInput[] {
 	const rootNode = data.locks.nodes[data.locks.root];
 	if (!rootNode?.inputs) {
@@ -148,9 +133,6 @@ function parseInputs(data: NixFlakeMetadataResponse): FlakeInput[] {
 	return inputs;
 }
 
-/**
- * Fetch and parse flake metadata from a path
- */
 async function fetchMetadata(
 	path: string,
 ): Promise<Result<NixFlakeMetadataResponse>> {

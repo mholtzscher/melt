@@ -201,9 +201,8 @@ export const flakeService: FlakeService = {
 		}
 
 		try {
-			const args = inputNames.join(" ");
 			const result =
-				await $`nix flake update ${args} --flake ${path} 2>&1`.text();
+				await $`nix flake update ${inputNames} --flake ${path} 2>&1`.text();
 			return { ok: true, data: result };
 		} catch (error) {
 			return {

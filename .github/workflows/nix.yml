@@ -10,6 +10,6 @@ jobs:
   nix:
     uses: mholtzscher/github-actions/.github/workflows/nix-build.yml@main
     with:
-      cache-name: mholtzscher
+      cachix-name: mholtzscher
     secrets:
       token: ${{ secrets.CACHIX_AUTH_TOKEN }}

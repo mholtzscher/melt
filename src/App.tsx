@@ -2,6 +2,7 @@ import { useKeyboard, useRenderer } from "@opentui/solid";
 import { createResource, Match, onMount, Show, Switch } from "solid-js";
 import type { FlakeData } from "./services/flake";
 import { flakeService } from "./services/flake";
+import { processManager } from "./services/processManager";
 import { createFlakeStore } from "./stores/flakeStore";
 import { theme } from "./theme";
 import type { FlakeInput } from "./types";
@@ -78,6 +79,7 @@ export function App(props: AppProps) {
 	);
 
 	function quit(code = 0) {
+		processManager.cleanup();
 		renderer.destroy();
 		process.exit(code);
 	}

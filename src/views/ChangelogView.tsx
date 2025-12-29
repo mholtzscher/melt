@@ -10,226 +10,226 @@ import { theme } from "../theme";
 import type { FlakeInput, GitHubCommit } from "../types";
 
 export interface ChangelogViewProps {
-	store: FlakeStore;
-	input: FlakeInput;
+  store: FlakeStore;
+  input: FlakeInput;
 }
 
 export function ChangelogView(props: ChangelogViewProps) {
-	const { state, actions } = props.store;
-	let scrollBoxRef: ScrollBoxRenderable | undefined;
+  const { state, actions } = props.store;
+  let scrollBoxRef: ScrollBoxRenderable | undefined;
 
-	const [commits, setCommits] = createSignal<GitHubCommit[]>([]);
-	const [lockedIndex, setLockedIndex] = createSignal(0);
-	const [cursorIndex, setCursorIndex] = createSignal(0);
-	const [loading, setLoading] = createSignal(true);
-	const [showConfirm, setShowConfirm] = createSignal(false);
-	const [confirmCommit, setConfirmCommit] = createSignal<GitHubCommit | undefined>();
+  const [commits, setCommits] = createSignal<GitHubCommit[]>([]);
+  const [lockedIndex, setLockedIndex] = createSignal(0);
+  const [cursorIndex, setCursorIndex] = createSignal(0);
+  const [loading, setLoading] = createSignal(true);
+  const [showConfirm, setShowConfirm] = createSignal(false);
+  const [confirmCommit, setConfirmCommit] = createSignal<GitHubCommit | undefined>();
 
-	createEffect(() => {
-		const cursor = cursorIndex();
-		if (scrollBoxRef) {
-			const viewportHeight = scrollBoxRef.height ?? 10;
-			const scrollTop = scrollBoxRef.scrollTop ?? 0;
-			if (cursor >= scrollTop + viewportHeight) {
-				scrollBoxRef.scrollTop = cursor - viewportHeight + 1;
-			}
-			if (cursor < scrollTop) {
-				scrollBoxRef.scrollTop = cursor;
-			}
-		}
-	});
+  createEffect(() => {
+    const cursor = cursorIndex();
+    if (scrollBoxRef) {
+      const viewportHeight = scrollBoxRef.height ?? 10;
+      const scrollTop = scrollBoxRef.scrollTop ?? 0;
+      if (cursor >= scrollTop + viewportHeight) {
+        scrollBoxRef.scrollTop = cursor - viewportHeight + 1;
+      }
+      if (cursor < scrollTop) {
+        scrollBoxRef.scrollTop = cursor;
+      }
+    }
+  });
 
-	onMount(async () => {
-		try {
-			const result = await githubService.getChangelog(props.input);
-			setCommits(result.commits);
-			setLockedIndex(result.lockedIndex);
-			setCursorIndex(result.lockedIndex);
-		} catch (_err) {
-			setCommits([]);
-			setLockedIndex(0);
-		} finally {
-			setLoading(false);
-		}
-	});
+  onMount(async () => {
+    try {
+      const result = await githubService.getChangelog(props.input);
+      setCommits(result.commits);
+      setLockedIndex(result.lockedIndex);
+      setCursorIndex(result.lockedIndex);
+    } catch (_err) {
+      setCommits([]);
+      setLockedIndex(0);
+    } finally {
+      setLoading(false);
+    }
+  });
 
-	function moveCursor(delta: number) {
-		const len = commits().length;
-		if (len === 0) return;
-		setCursorIndex((prev) => {
-			const next = prev + delta;
-			if (next < 0) return 0;
-			if (next >= len) return len - 1;
-			return next;
-		});
-	}
+  function moveCursor(delta: number) {
+    const len = commits().length;
+    if (len === 0) return;
+    setCursorIndex((prev) => {
+      const next = prev + delta;
+      if (next < 0) return 0;
+      if (next >= len) return len - 1;
+      return next;
+    });
+  }
 
-	function showConfirmDialog() {
-		const commit = commits()[cursorIndex()];
-		if (commit) {
-			setConfirmCommit(commit);
-			setShowConfirm(true);
-		}
-	}
+  function showConfirmDialog() {
+    const commit = commits()[cursorIndex()];
+    if (commit) {
+      setConfirmCommit(commit);
+      setShowConfirm(true);
+    }
+  }
 
-	function hideConfirmDialog() {
-		setShowConfirm(false);
-		setConfirmCommit(undefined);
-	}
+  function hideConfirmDialog() {
+    setShowConfirm(false);
+    setConfirmCommit(undefined);
+  }
 
-	async function handleConfirm() {
-		const commit = confirmCommit();
-		const { owner, repo } = props.input;
-		if (!commit || !owner || !repo) return;
-		hideConfirmDialog();
-		const success = await actions.lockToCommit(props.input.name, commit.sha, owner, repo);
-		if (success) {
-			actions.closeChangelog();
-			actions.refresh();
-		}
-	}
+  async function handleConfirm() {
+    const commit = confirmCommit();
+    const { owner, repo } = props.input;
+    if (!commit || !owner || !repo) return;
+    hideConfirmDialog();
+    const success = await actions.lockToCommit(props.input.name, commit.sha, owner, repo);
+    if (success) {
+      actions.closeChangelog();
+      actions.refresh();
+    }
+  }
 
-	useKeyboard((e) => {
-		if (e.eventType === "release") return;
+  useKeyboard((e) => {
+    if (e.eventType === "release") return;
 
-		if (showConfirm()) {
-			switch (e.name) {
-				case "y":
-					handleConfirm();
-					break;
-				case "n":
-				case "escape":
-				case "q":
-					hideConfirmDialog();
-					break;
-			}
-			return;
-		}
+    if (showConfirm()) {
+      switch (e.name) {
+        case "y":
+          handleConfirm();
+          break;
+        case "n":
+        case "escape":
+        case "q":
+          hideConfirmDialog();
+          break;
+      }
+      return;
+    }
 
-		switch (e.name) {
-			case "j":
-			case "down":
-				moveCursor(1);
-				break;
-			case "k":
-			case "up":
-				moveCursor(-1);
-				break;
-			case "space":
-				showConfirmDialog();
-				break;
-			case "escape":
-			case "q":
-				actions.closeChangelog();
-				break;
-		}
-	});
+    switch (e.name) {
+      case "j":
+      case "down":
+        moveCursor(1);
+        break;
+      case "k":
+      case "up":
+        moveCursor(-1);
+        break;
+      case "space":
+        showConfirmDialog();
+        break;
+      case "escape":
+      case "q":
+        actions.closeChangelog();
+        break;
+    }
+  });
 
-	return (
-		<box flexDirection="column" flexGrow={1}>
-			<box
-				flexDirection="row"
-				paddingLeft={1}
-				paddingRight={1}
-				flexShrink={0}
-				borderStyle="rounded"
-				borderColor={theme.border}
-			>
-				<text fg={theme.accent} attributes={1}>
-					Changelog: {props.input.name}
-				</text>
-				<text fg={theme.textDim}> ({props.input.url})</text>
-			</box>
+  return (
+    <box flexDirection="column" flexGrow={1}>
+      <box
+        flexDirection="row"
+        paddingLeft={1}
+        paddingRight={1}
+        flexShrink={0}
+        borderStyle="rounded"
+        borderColor={theme.border}
+      >
+        <text fg={theme.accent} attributes={1}>
+          Changelog: {props.input.name}
+        </text>
+        <text fg={theme.textDim}> ({props.input.url})</text>
+      </box>
 
-			<Show when={loading()}>
-				<box paddingLeft={1} flexGrow={1}>
-					<text fg={theme.warning}>Loading commits...</text>
-				</box>
-			</Show>
+      <Show when={loading()}>
+        <box paddingLeft={1} flexGrow={1}>
+          <text fg={theme.warning}>Loading commits...</text>
+        </box>
+      </Show>
 
-			<Show when={!loading()}>
-				<Show
-					when={commits().length > 0}
-					fallback={
-						<box paddingLeft={1} flexGrow={1}>
-							<text fg={theme.success}>Already up to date!</text>
-						</box>
-					}
-				>
-					<box flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border}>
-						<scrollbox
-							ref={scrollBoxRef}
-							flexGrow={1}
-							paddingLeft={1}
-							paddingRight={1}
-							overflow="hidden"
-						>
-							<box flexDirection="column">
-								<For each={commits()}>
-									{(commit, index) => {
-										const isCursor = () => cursorIndex() === index();
-										const isLocked = () => commit.isLocked === true;
+      <Show when={!loading()}>
+        <Show
+          when={commits().length > 0}
+          fallback={
+            <box paddingLeft={1} flexGrow={1}>
+              <text fg={theme.success}>Already up to date!</text>
+            </box>
+          }
+        >
+          <box flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border}>
+            <scrollbox
+              ref={scrollBoxRef}
+              flexGrow={1}
+              paddingLeft={1}
+              paddingRight={1}
+              overflow="hidden"
+            >
+              <box flexDirection="column">
+                <For each={commits()}>
+                  {(commit, index) => {
+                    const isCursor = () => cursorIndex() === index();
+                    const isLocked = () => commit.isLocked === true;
 
-										return (
-											<box
-												flexDirection="row"
-												backgroundColor={isCursor() ? theme.bgHighlight : undefined}
-											>
-												<box width={3}>
-													<text fg={theme.warning}>{isLocked() ? "\u{1F512}" : "  "}</text>
-												</box>
+                    return (
+                      <box
+                        flexDirection="row"
+                        backgroundColor={isCursor() ? theme.bgHighlight : undefined}
+                      >
+                        <box width={3}>
+                          <text fg={theme.warning}>{isLocked() ? "\u{1F512}" : "  "}</text>
+                        </box>
 
-												<box width={9}>
-													<text fg={isLocked() ? theme.warning : theme.sha}>{commit.shortSha}</text>
-												</box>
+                        <box width={9}>
+                          <text fg={isLocked() ? theme.warning : theme.sha}>{commit.shortSha}</text>
+                        </box>
 
-												<box width={16}>
-													<text fg={theme.info}>
-														{commit.author.length > 14
-															? `${commit.author.substring(0, 14)}..`
-															: commit.author.padEnd(14)}
-													</text>
-												</box>
+                        <box width={16}>
+                          <text fg={theme.info}>
+                            {commit.author.length > 14
+                              ? `${commit.author.substring(0, 14)}..`
+                              : commit.author.padEnd(14)}
+                          </text>
+                        </box>
 
-												<box width={10}>
-													<text fg={theme.textDim}>{commit.date.padEnd(8)}</text>
-												</box>
+                        <box width={10}>
+                          <text fg={theme.textDim}>{commit.date.padEnd(8)}</text>
+                        </box>
 
-												<text
-													fg={isCursor() ? theme.cursor : isLocked() ? theme.warning : theme.text}
-													attributes={isCursor() || isLocked() ? 1 : 0}
-												>
-													{commit.message.length > 55
-														? `${commit.message.substring(0, 55)}...`
-														: commit.message}
-												</text>
-											</box>
-										);
-									}}
-								</For>
-							</box>
-						</scrollbox>
-					</box>
-				</Show>
-			</Show>
+                        <text
+                          fg={isCursor() ? theme.cursor : isLocked() ? theme.warning : theme.text}
+                          attributes={isCursor() || isLocked() ? 1 : 0}
+                        >
+                          {commit.message.length > 55
+                            ? `${commit.message.substring(0, 55)}...`
+                            : commit.message}
+                        </text>
+                      </box>
+                    );
+                  }}
+                </For>
+              </box>
+            </scrollbox>
+          </box>
+        </Show>
+      </Show>
 
-			<HelpBar
-				statusMessage={() => state.statusMessage}
-				loading={() => state.loading}
-				shortcuts={shortcuts.changelog}
-			>
-				<box flexDirection="row" marginLeft={2}>
-					<text fg={theme.success}>+{lockedIndex()} new</text>
-					<text fg={theme.warning}> {"\u{1F512}"} </text>
-					<text fg={theme.textMuted}>{commits().length - lockedIndex() - 1} older</text>
-				</box>
-			</HelpBar>
+      <HelpBar
+        statusMessage={() => state.statusMessage}
+        loading={() => state.loading}
+        shortcuts={shortcuts.changelog}
+      >
+        <box flexDirection="row" marginLeft={2}>
+          <text fg={theme.success}>+{lockedIndex()} new</text>
+          <text fg={theme.warning}> {"\u{1F512}"} </text>
+          <text fg={theme.textMuted}>{commits().length - lockedIndex() - 1} older</text>
+        </box>
+      </HelpBar>
 
-			<ConfirmDialog
-				visible={showConfirm}
-				inputName={() => props.input.name}
-				commit={confirmCommit}
-			/>
-		</box>
-	);
+      <ConfirmDialog
+        visible={showConfirm}
+        inputName={() => props.input.name}
+        commit={confirmCommit}
+      />
+    </box>
+  );
 }

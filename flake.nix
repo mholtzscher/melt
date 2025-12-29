@@ -93,10 +93,13 @@
           packages = with pkgsFor.${system}; [
             bun
             bun2nix
+            oxlint
+            oxfmt
           ];
 
           shellHook = ''
             bun install --frozen-lockfile
+            export PATH=${pkgsFor.${system}.oxfmt}/bin:${pkgsFor.${system}.oxlint}/bin:$PATH
           '';
         };
       });

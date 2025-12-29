@@ -6,7 +6,7 @@
 - `bun start` - Run the application
 - `bun run lint` - Run oxlint + typecheck
 - `bun run typecheck` - Run typescript check
-- `bun run format` - Format code with Prettier
+- `bun run format` - Format code with oxfmt
 
 ## Code Style
 

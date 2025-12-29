@@ -7,8 +7,7 @@ const app = command({
 		flake: positional({
 			type: optional(string),
 			displayName: "flake",
-			description:
-				"Path to flake directory or flake.nix file (defaults to current directory)",
+			description: "Path to flake directory or flake.nix file (defaults to current directory)",
 		}),
 	},
 	handler: (args) => args,

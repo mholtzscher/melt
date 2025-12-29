@@ -86,16 +86,11 @@ export function App(props: AppProps) {
 
 	return (
 		<Switch>
-			<Match
-				when={flakeData.state === "pending" || flakeData.state === "unresolved"}
-			>
+			<Match when={flakeData.state === "pending" || flakeData.state === "unresolved"}>
 				<LoadingScreen onQuit={quit} />
 			</Match>
 			<Match when={flakeData.state === "errored"}>
-				<ErrorScreen
-					error={toErrorMessage(flakeData.error)}
-					onQuit={() => quit(1)}
-				/>
+				<ErrorScreen error={toErrorMessage(flakeData.error)} onQuit={() => quit(1)} />
 			</Match>
 			<Match when={flakeData.state === "ready" && flakeData()}>
 				{(data: () => FlakeData) => <MainView flake={data()} onQuit={quit} />}
@@ -122,9 +117,7 @@ function MainView(props: MainViewProps) {
 				<ListView store={{ state, actions }} onQuit={props.onQuit} />
 			</Show>
 			<Show when={state.changelogInput}>
-				{(input: () => FlakeInput) => (
-					<ChangelogView store={{ state, actions }} input={input()} />
-				)}
+				{(input: () => FlakeInput) => <ChangelogView store={{ state, actions }} input={input()} />}
 			</Show>
 		</box>
 	);

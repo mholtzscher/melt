@@ -1,10 +1,5 @@
 import { dirname, resolve } from "node:path";
-import type {
-	FlakeInput,
-	FlakeInputType,
-	NixFlakeMetadataResponse,
-	Result,
-} from "../types";
+import type { FlakeInput, FlakeInputType, NixFlakeMetadataResponse, Result } from "../types";
 import { processManager } from "./processManager";
 
 export interface FlakeService {
@@ -39,10 +34,7 @@ function hasFlakeNix(path: string = "."): Promise<boolean> {
 	return Bun.file(`${path}/flake.nix`).exists();
 }
 
-function getInputType(
-	locked?: { type: string },
-	original?: { type: string },
-): FlakeInputType {
+function getInputType(locked?: { type: string }, original?: { type: string }): FlakeInputType {
 	const type = locked?.type || original?.type || "other";
 
 	switch (type) {
@@ -174,9 +166,7 @@ async function runNixCommand(args: string[]): Promise<Result<string>> {
 	}
 }
 
-async function fetchMetadata(
-	path: string,
-): Promise<Result<NixFlakeMetadataResponse>> {
+async function fetchMetadata(path: string): Promise<Result<NixFlakeMetadataResponse>> {
 	const result = await runNixCommand(["flake", "metadata", "--json", path]);
 	if (!result.ok) {
 		return result;
@@ -234,10 +224,7 @@ export const flakeService: FlakeService = {
 		};
 	},
 
-	async updateInputs(
-		path: string,
-		inputNames: string[],
-	): Promise<Result<string>> {
+	async updateInputs(path: string, inputNames: string[]): Promise<Result<string>> {
 		if (inputNames.length === 0) {
 			return { ok: true, data: "No inputs to update" };
 		}

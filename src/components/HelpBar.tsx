@@ -37,9 +37,7 @@ export function HelpBar(props: HelpBarProps) {
 			<Show when={props.shortcuts.length > 0}>
 				<box flexDirection="row">
 					<For each={props.shortcuts}>
-						{(item) => (
-							<ShortcutItem key={item.key} description={item.description} />
-						)}
+						{(item) => <ShortcutItem key={item.key} description={item.description} />}
 					</For>
 				</box>
 			</Show>
@@ -52,9 +50,7 @@ export function HelpBar(props: HelpBarProps) {
 
 			<box flexGrow={1}>
 				<Show when={props.statusMessage()}>
-					<text fg={props.loading() ? theme.warning : theme.info}>
-						{props.statusMessage()}
-					</text>
+					<text fg={props.loading() ? theme.warning : theme.info}>{props.statusMessage()}</text>
 				</Show>
 			</box>
 

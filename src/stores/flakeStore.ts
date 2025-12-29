@@ -49,9 +49,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 
 		if (!hasShownTokenHint && !githubService.hasGitHubToken()) {
 			hasShownTokenHint = true;
-			toast.info("Set GITHUB_TOKEN for higher rate limits", {
-				duration: 8000,
-			});
+			toast.info("Set GITHUB_TOKEN for higher rate limits");
 		}
 
 		checkingToastId = toast.loading("Checking for updates...");
@@ -60,18 +58,13 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			await githubService.checkForUpdates(toCheck, (name, status) => {
 				setState("updateStatuses", name, status);
 			});
-			toast.dismiss(checkingToastId);
+			toast.success("Update check complete", { id: checkingToastId });
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
-			if (errorMsg.includes("rate limit")) {
-				toast.error(`${errorMsg} - set GITHUB_TOKEN env var`, {
-					id: checkingToastId,
-				});
-			} else {
-				toast.error(`Error checking updates: ${errorMsg}`, {
-					id: checkingToastId,
-				});
-			}
+			const msg = errorMsg.includes("rate limit")
+				? `${errorMsg} - set GITHUB_TOKEN env var`
+				: `Error checking updates: ${errorMsg}`;
+			toast.error(msg, { id: checkingToastId });
 		} finally {
 			isCheckingUpdates = false;
 			checkingToastId = undefined;
@@ -79,14 +72,12 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 	}
 
 	async function refresh() {
-		const toastId = toast.loading("Refreshing...");
 		const result = await flakeService.refresh(state.path);
 		if (!result.ok) {
-			toast.error(result.error, { id: toastId });
+			toast.error(result.error);
 			return;
 		}
 
-		toast.dismiss(toastId);
 		setState("inputs", result.data.inputs);
 		await checkUpdates(result.data.inputs);
 	}
@@ -110,26 +101,27 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			}));
 		}
 
-		const result = await flakeService.updateInputs(state.path, names);
+		try {
+			const result = await flakeService.updateInputs(state.path, names);
 
-		for (const name of names) {
-			setState("updateStatuses", name, (prev) => ({
-				...prev,
-				hasUpdate: prev?.hasUpdate ?? false,
-				commitsBehind: prev?.commitsBehind ?? 0,
-				loading: prev?.loading ?? false,
-				updating: false,
-			}));
-		}
+			for (const name of names) {
+				setState("updateStatuses", name, (prev) => ({
+					...prev,
+					hasUpdate: prev?.hasUpdate ?? false,
+					commitsBehind: prev?.commitsBehind ?? 0,
+					loading: prev?.loading ?? false,
+					updating: false,
+				}));
+			}
 
-		setState("loading", false);
-
-		if (result.ok) {
-			toast.dismiss(toastId);
-			await refresh();
-			toast.success(`Updated ${names.length} input(s)`);
-		} else {
-			toast.error(result.error, { id: toastId });
+			if (result.ok) {
+				toast.success(`Updated ${names.length} input(s)`, { id: toastId });
+				await refresh();
+			} else {
+				toast.error(result.error, { id: toastId });
+			}
+		} finally {
+			setState("loading", false);
 		}
 	}
 
@@ -147,26 +139,27 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			}));
 		}
 
-		const result = await flakeService.updateAll(state.path);
+		try {
+			const result = await flakeService.updateAll(state.path);
 
-		for (const input of state.inputs) {
-			setState("updateStatuses", input.name, (prev) => ({
-				...prev,
-				hasUpdate: prev?.hasUpdate ?? false,
-				commitsBehind: prev?.commitsBehind ?? 0,
-				loading: prev?.loading ?? false,
-				updating: false,
-			}));
-		}
+			for (const input of state.inputs) {
+				setState("updateStatuses", input.name, (prev) => ({
+					...prev,
+					hasUpdate: prev?.hasUpdate ?? false,
+					commitsBehind: prev?.commitsBehind ?? 0,
+					loading: prev?.loading ?? false,
+					updating: false,
+				}));
+			}
 
-		setState("loading", false);
-
-		if (result.ok) {
-			toast.dismiss(toastId);
-			await refresh();
-			toast.success("All inputs updated");
-		} else {
-			toast.error(result.error, { id: toastId });
+			if (result.ok) {
+				toast.success("All inputs updated", { id: toastId });
+				await refresh();
+			} else {
+				toast.error(result.error, { id: toastId });
+			}
+		} finally {
+			setState("loading", false);
 		}
 	}
 

@@ -1,5 +1,5 @@
 import type { CliRenderer } from "@opentui/core";
-import { toast, ToasterRenderable, TOAST_DURATION } from "@opentui-ui/toast";
+import { TOAST_DURATION, ToasterRenderable, toast } from "@opentui-ui/toast";
 import { theme } from "../theme";
 
 let toasterInitialized = false;

@@ -3,13 +3,13 @@ import type { FlakeData } from "../services/flake";
 import { flakeService } from "../services/flake";
 import { githubService } from "../services/github";
 import type { FlakeInput, UpdateStatus } from "../types";
+import { toast } from "@opentui-ui/toast";
 
 export interface FlakeState {
 	path: string;
 	inputs: FlakeInput[];
 	updateStatuses: Record<string, UpdateStatus>;
 	loading: boolean;
-	statusMessage: string | undefined;
 	changelogInput: FlakeInput | undefined;
 }
 
@@ -39,26 +39,10 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		inputs: initialFlake.inputs,
 		updateStatuses: {},
 		loading: false,
-		statusMessage: undefined,
 		changelogInput: undefined,
 	});
 
 	let isCheckingUpdates = false;
-	let statusTimeout: ReturnType<typeof setTimeout> | undefined;
-
-	function setStatusMessage(message: string | undefined, timeout?: number) {
-		if (statusTimeout) {
-			clearTimeout(statusTimeout);
-			statusTimeout = undefined;
-		}
-		setState("statusMessage", message);
-		if (message && timeout) {
-			statusTimeout = setTimeout(() => {
-				setState("statusMessage", undefined);
-				statusTimeout = undefined;
-			}, timeout);
-		}
-	}
 
 	async function checkUpdates(inputsList?: FlakeInput[]) {
 		if (isCheckingUpdates) return;
@@ -68,19 +52,25 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		const tokenMsg = githubService.hasGitHubToken()
 			? ""
 			: " (set GITHUB_TOKEN for higher rate limits)";
-		setStatusMessage(`Checking for updates...${tokenMsg}`);
+		const toastId = toast.loading(`Checking for updates...${tokenMsg}`);
 
 		try {
 			await githubService.checkForUpdates(toCheck, (name, status) => {
 				setState("updateStatuses", name, status);
 			});
-			setStatusMessage(undefined);
+			toast.dismiss(toastId);
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
 			if (errorMsg.includes("rate limit")) {
-				setStatusMessage(`${errorMsg} - set GITHUB_TOKEN env var`, 5000);
+				toast.error(`${errorMsg} - set GITHUB_TOKEN env var`, {
+					id: toastId,
+					duration: 5000,
+				});
 			} else {
-				setStatusMessage(`Error checking updates: ${errorMsg}`, 5000);
+				toast.error(`Error checking updates: ${errorMsg}`, {
+					id: toastId,
+					duration: 5000,
+				});
 			}
 		} finally {
 			isCheckingUpdates = false;
@@ -88,24 +78,27 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 	}
 
 	async function refresh() {
-		setStatusMessage("Refreshing...");
+		const loadingId = toast.loading("Refreshing...");
+
 		const result = await flakeService.refresh(state.path);
 		if (!result.ok) {
-			setStatusMessage(`Error: ${result.error}`, 3000);
+			toast.error(`Error: ${result.error}`, { id: loadingId, duration: 3000 });
 			return;
 		}
 
 		setState("inputs", result.data.inputs);
+		toast.dismiss(loadingId);
+
 		await checkUpdates(result.data.inputs);
 	}
 
 	async function updateSelected(names: string[]) {
 		if (names.length === 0) {
-			setStatusMessage("No inputs selected", 2000);
+			toast.warning("No inputs selected", { duration: 2000 });
 			return;
 		}
 
-		setStatusMessage(`Updating ${names.join(", ")}...`);
+		const loadingId = toast.loading(`Updating ${names.join(", ")}...`);
 		setState("loading", true);
 
 		for (const name of names) {
@@ -134,14 +127,20 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 
 		if (result.ok) {
 			await refresh();
-			setStatusMessage(`Updated ${names.length} input(s)`, 3000);
+			toast.success(`Updated ${names.length} input(s)`, {
+				id: loadingId,
+				duration: 3000,
+			});
 		} else {
-			setStatusMessage(`Error: ${result.error}`, 3000);
+			toast.error(`Error: ${result.error}`, {
+				id: loadingId,
+				duration: 3000,
+			});
 		}
 	}
 
 	async function updateAll() {
-		setStatusMessage("Updating all inputs...");
+		const loadingId = toast.loading("Updating all inputs...");
 		setState("loading", true);
 
 		for (const input of state.inputs) {
@@ -170,9 +169,15 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 
 		if (result.ok) {
 			await refresh();
-			setStatusMessage("All inputs updated", 3000);
+			toast.success("All inputs updated", {
+				id: loadingId,
+				duration: 3000,
+			});
 		} else {
-			setStatusMessage(`Error: ${result.error}`, 3000);
+			toast.error(`Error: ${result.error}`, {
+				id: loadingId,
+				duration: 3000,
+			});
 		}
 	}
 
@@ -182,7 +187,9 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		owner: string,
 		repo: string,
 	): Promise<boolean> {
-		setStatusMessage(`Locking ${inputName} to ${sha.substring(0, 7)}...`);
+		const loadingId = toast.loading(
+			`Locking ${inputName} to ${sha.substring(0, 7)}...`,
+		);
 
 		const result = await flakeService.lockInputToRev(
 			state.path,
@@ -193,16 +200,24 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		);
 
 		if (result.ok) {
-			setStatusMessage(`Locked ${inputName} to ${sha.substring(0, 7)}`, 3000);
+			toast.success(`Locked ${inputName} to ${sha.substring(0, 7)}`, {
+				id: loadingId,
+				duration: 3000,
+			});
 			return true;
 		}
-		setStatusMessage(`Error: ${result.error}`, 3000);
+		toast.error(`Error: ${result.error}`, {
+			id: loadingId,
+			duration: 3000,
+		});
 		return false;
 	}
 
 	function showChangelog(input: FlakeInput) {
 		if (input.type !== "github") {
-			setStatusMessage("Changelog only available for GitHub inputs", 2000);
+			toast.info("Changelog only available for GitHub inputs", {
+				duration: 2000,
+			});
 			return;
 		}
 		setState("changelogInput", input);

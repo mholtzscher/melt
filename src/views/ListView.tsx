@@ -291,7 +291,6 @@ export function ListView(props: ListViewProps) {
 			</box>
 
 			<HelpBar
-				statusMessage={() => state.statusMessage}
 				loading={() => state.loading}
 				shortcuts={shortcuts.list}
 			>

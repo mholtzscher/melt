@@ -240,7 +240,6 @@ export function ChangelogView(props: ChangelogViewProps) {
 			</Show>
 
 			<HelpBar
-				statusMessage={() => state.statusMessage}
 				loading={() => state.loading}
 				shortcuts={shortcuts.changelog}
 			>

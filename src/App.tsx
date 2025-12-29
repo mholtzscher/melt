@@ -8,6 +8,7 @@ import { theme } from "./theme";
 import type { FlakeInput } from "./types";
 import { ChangelogView } from "./views/ChangelogView";
 import { ListView } from "./views/ListView";
+import { ToasterRenderable } from "@opentui-ui/toast";
 
 export interface AppProps {
 	flakePath?: string;
@@ -111,9 +112,12 @@ interface MainViewProps {
 
 function MainView(props: MainViewProps) {
 	const { state, actions } = createFlakeStore(props.flake);
+	const renderer = useRenderer();
 
 	onMount(() => {
 		actions.checkUpdates();
+		const toaster = new ToasterRenderable(renderer, { position: "top-right" });
+		renderer.root.add(toaster);
 	});
 
 	return (

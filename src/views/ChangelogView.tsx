@@ -23,9 +23,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 	const [cursorIndex, setCursorIndex] = createSignal(0);
 	const [loading, setLoading] = createSignal(true);
 	const [showConfirm, setShowConfirm] = createSignal(false);
-	const [confirmCommit, setConfirmCommit] = createSignal<
-		GitHubCommit | undefined
-	>();
+	const [confirmCommit, setConfirmCommit] = createSignal<GitHubCommit | undefined>();
 
 	createEffect(() => {
 		const cursor = cursorIndex();
@@ -84,12 +82,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 		const { owner, repo } = props.input;
 		if (!commit || !owner || !repo) return;
 		hideConfirmDialog();
-		const success = await actions.lockToCommit(
-			props.input.name,
-			commit.sha,
-			owner,
-			repo,
-		);
+		const success = await actions.lockToCommit(props.input.name, commit.sha, owner, repo);
 		if (success) {
 			actions.closeChangelog();
 			actions.refresh();
@@ -163,12 +156,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 						</box>
 					}
 				>
-					<box
-						flexGrow={1}
-						flexShrink={1}
-						borderStyle="rounded"
-						borderColor={theme.border}
-					>
+					<box flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border}>
 						<scrollbox
 							ref={scrollBoxRef}
 							flexGrow={1}
@@ -185,20 +173,14 @@ export function ChangelogView(props: ChangelogViewProps) {
 										return (
 											<box
 												flexDirection="row"
-												backgroundColor={
-													isCursor() ? theme.bgHighlight : undefined
-												}
+												backgroundColor={isCursor() ? theme.bgHighlight : undefined}
 											>
 												<box width={3}>
-													<text fg={theme.warning}>
-														{isLocked() ? "\u{1F512}" : "  "}
-													</text>
+													<text fg={theme.warning}>{isLocked() ? "\u{1F512}" : "  "}</text>
 												</box>
 
 												<box width={9}>
-													<text fg={isLocked() ? theme.warning : theme.sha}>
-														{commit.shortSha}
-													</text>
+													<text fg={isLocked() ? theme.warning : theme.sha}>{commit.shortSha}</text>
 												</box>
 
 												<box width={16}>
@@ -210,19 +192,11 @@ export function ChangelogView(props: ChangelogViewProps) {
 												</box>
 
 												<box width={10}>
-													<text fg={theme.textDim}>
-														{commit.date.padEnd(8)}
-													</text>
+													<text fg={theme.textDim}>{commit.date.padEnd(8)}</text>
 												</box>
 
 												<text
-													fg={
-														isCursor()
-															? theme.cursor
-															: isLocked()
-																? theme.warning
-																: theme.text
-													}
+													fg={isCursor() ? theme.cursor : isLocked() ? theme.warning : theme.text}
 													attributes={isCursor() || isLocked() ? 1 : 0}
 												>
 													{commit.message.length > 55
@@ -247,9 +221,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 				<box flexDirection="row" marginLeft={2}>
 					<text fg={theme.success}>+{lockedIndex()} new</text>
 					<text fg={theme.warning}> {"\u{1F512}"} </text>
-					<text fg={theme.textMuted}>
-						{commits().length - lockedIndex() - 1} older
-					</text>
+					<text fg={theme.textMuted}>{commits().length - lockedIndex() - 1} older</text>
 				</box>
 			</HelpBar>
 

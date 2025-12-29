@@ -202,7 +202,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 				</Show>
 			</Show>
 
-			<HelpBar statusMessage={() => state.statusMessage} loading={() => state.loading} shortcuts={shortcuts.changelog}>
+			<HelpBar shortcuts={shortcuts.changelog}>
 				<box flexDirection="row" marginLeft={2}>
 					<text fg={theme.success}>+{lockedIndex()} new</text>
 					<text fg={theme.warning}> {"\u{1F512}"} </text>

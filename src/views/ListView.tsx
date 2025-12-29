@@ -264,7 +264,7 @@ export function ListView(props: ListViewProps) {
 				</scrollbox>
 			</box>
 
-			<HelpBar statusMessage={() => state.statusMessage} loading={() => state.loading} shortcuts={shortcuts.list}>
+			<HelpBar shortcuts={shortcuts.list}>
 				<Show when={selectedIndices().size > 0}>
 					<box marginLeft={2}>
 						<text fg={theme.selected}>{selectedIndices().size} selected</text>

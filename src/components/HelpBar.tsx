@@ -1,4 +1,4 @@
-import type { Accessor, JSX } from "solid-js";
+import type { JSX } from "solid-js";
 import { For, Show } from "solid-js";
 import type { HelpItem } from "../config/shortcuts";
 import { theme } from "../theme";
@@ -18,8 +18,6 @@ function ShortcutItem(props: ShortcutItemProps) {
 }
 
 export interface HelpBarProps {
-	statusMessage: Accessor<string | undefined>;
-	loading: Accessor<boolean>;
 	shortcuts: readonly HelpItem[];
 	children?: JSX.Element;
 }
@@ -40,17 +38,7 @@ export function HelpBar(props: HelpBarProps) {
 				</box>
 			</Show>
 
-			<Show when={props.shortcuts.length > 0 && props.statusMessage()}>
-				<box marginRight={1}>
-					<text fg={theme.textDim}>│</text>
-				</box>
-			</Show>
-
-			<box flexGrow={1}>
-				<Show when={props.statusMessage()}>
-					<text fg={props.loading() ? theme.warning : theme.info}>{props.statusMessage()}</text>
-				</Show>
-			</box>
+			<box flexGrow={1} />
 
 			{props.children}
 		</box>

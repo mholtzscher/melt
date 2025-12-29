@@ -349,6 +349,10 @@
     url = "https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.30.tgz";
     hash = "sha512-GQ7Nw5G2lTu/BtHTKfXhKHok2WGetd4XYcVKGx00SjAk8GMwgJM3zr6zORiPGuOE+/vkc90KtTosSSvaCjKb2Q==";
   };
+  "@opentui-ui/toast@0.0.3" = fetchurl {
+    url = "https://registry.npmjs.org/@opentui-ui/toast/-/toast-0.0.3.tgz";
+    hash = "sha512-SraqA70A0rgu5+uaG7AIrdu3AyE5VbUsL/NzQ3XXUbyGHg5pwpDVQ5s//TkEpjUPf73tXZ3O76m5CJOB9OPLoQ==";
+  };
   "@opentui/core-darwin-arm64@0.1.63" = fetchurl {
     url = "https://registry.npmjs.org/@opentui/core-darwin-arm64/-/core-darwin-arm64-0.1.63.tgz";
     hash = "sha512-jKCThZGiiublKkP/hMtDtl1MLCw5NU0hMNJdEYvz1WLT9bzliWf6Kb7MIDAmk32XlbQW8/RHdp+hGyGDXK62OQ==";

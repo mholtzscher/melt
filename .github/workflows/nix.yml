@@ -12,4 +12,4 @@ jobs:
     with:
       cachix-name: mholtzscher
     secrets:
-      cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      cachix-auth-token: ${{ github.event_name == 'push' && secrets.CACHIX_AUTH_TOKEN || '' }}

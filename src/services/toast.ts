@@ -8,12 +8,6 @@ export function mountToaster(renderer: CliRenderer): void {
 	if (toaster) return;
 
 	toaster = new ToasterRenderable(renderer, {
-		position: "top-right",
-		gap: 1,
-		stackingMode: "stack",
-		visibleToasts: 3,
-		maxWidth: 50,
-		offset: { top: 1, right: 2, bottom: 1, left: 2 },
 		toastOptions: {
 			style: {
 				backgroundColor: theme.bg,

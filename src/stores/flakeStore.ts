@@ -1,3 +1,4 @@
+import { batch } from "solid-js";
 import { createStore } from "solid-js/store";
 import type { FlakeData } from "../services/flake";
 import { flakeService } from "../services/flake";
@@ -81,28 +82,32 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 
 		setState("loading", true);
 
-		for (const name of names) {
-			setState("updateStatuses", name, (prev) => ({
-				...prev,
-				hasUpdate: prev?.hasUpdate ?? false,
-				commitsBehind: prev?.commitsBehind ?? 0,
-				loading: prev?.loading ?? false,
-				updating: true,
-			}));
-		}
-
-		try {
-			const result = await flakeService.updateInputs(state.path, names);
-
+		batch(() => {
 			for (const name of names) {
 				setState("updateStatuses", name, (prev) => ({
 					...prev,
 					hasUpdate: prev?.hasUpdate ?? false,
 					commitsBehind: prev?.commitsBehind ?? 0,
 					loading: prev?.loading ?? false,
-					updating: false,
+					updating: true,
 				}));
 			}
+		});
+
+		try {
+			const result = await flakeService.updateInputs(state.path, names);
+
+			batch(() => {
+				for (const name of names) {
+					setState("updateStatuses", name, (prev) => ({
+						...prev,
+						hasUpdate: prev?.hasUpdate ?? false,
+						commitsBehind: prev?.commitsBehind ?? 0,
+						loading: prev?.loading ?? false,
+						updating: false,
+					}));
+				}
+			});
 
 			if (result.ok) {
 				await refresh();
@@ -117,28 +122,32 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 	async function updateAll() {
 		setState("loading", true);
 
-		for (const input of state.inputs) {
-			setState("updateStatuses", input.name, (prev) => ({
-				...prev,
-				hasUpdate: prev?.hasUpdate ?? false,
-				commitsBehind: prev?.commitsBehind ?? 0,
-				loading: prev?.loading ?? false,
-				updating: true,
-			}));
-		}
-
-		try {
-			const result = await flakeService.updateAll(state.path);
-
+		batch(() => {
 			for (const input of state.inputs) {
 				setState("updateStatuses", input.name, (prev) => ({
 					...prev,
 					hasUpdate: prev?.hasUpdate ?? false,
 					commitsBehind: prev?.commitsBehind ?? 0,
 					loading: prev?.loading ?? false,
-					updating: false,
+					updating: true,
 				}));
 			}
+		});
+
+		try {
+			const result = await flakeService.updateAll(state.path);
+
+			batch(() => {
+				for (const input of state.inputs) {
+					setState("updateStatuses", input.name, (prev) => ({
+						...prev,
+						hasUpdate: prev?.hasUpdate ?? false,
+						commitsBehind: prev?.commitsBehind ?? 0,
+						loading: prev?.loading ?? false,
+						updating: false,
+					}));
+				}
+			});
 
 			if (result.ok) {
 				await refresh();

@@ -38,7 +38,6 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 	});
 
 	let isCheckingUpdates = false;
-	let checkingToastId: string | number | undefined;
 
 	async function checkUpdates(inputsList?: FlakeInput[]) {
 		if (isCheckingUpdates) return;
@@ -46,35 +45,29 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 
 		const toCheck = inputsList || state.inputs;
 
-		checkingToastId = toast.loading("Checking inputs for updates...");
-
 		try {
 			await githubService.checkForUpdates(toCheck, (name, status) => {
 				setState("updateStatuses", name, status);
 			});
-			toast.success("Update check complete", { id: checkingToastId });
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
 			const msg = errorMsg.includes("rate limit")
 				? `${errorMsg} - set GITHUB_TOKEN env var`
 				: `Error checking updates: ${errorMsg}`;
-			toast.error(msg, { id: checkingToastId });
+			toast.error(msg);
 		} finally {
 			isCheckingUpdates = false;
-			checkingToastId = undefined;
 		}
 	}
 
 	async function refresh() {
-		const toastId = toast.loading("Reloading flake...");
 		const result = await flakeService.refresh(state.path);
 		if (!result.ok) {
-			toast.error(result.error, { id: toastId });
+			toast.error(result.error);
 			return;
 		}
 
 		setState("inputs", result.data.inputs);
-		toast.success("Flake reloaded", { id: toastId });
 		await checkUpdates(result.data.inputs);
 	}
 
@@ -84,7 +77,6 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			return;
 		}
 
-		const toastId = toast.loading(`Updating ${names.join(", ")}...`);
 		setState("loading", true);
 
 		for (const name of names) {
@@ -111,10 +103,9 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			}
 
 			if (result.ok) {
-				toast.success(`Updated ${names.length} input(s)`, { id: toastId });
 				await refresh();
 			} else {
-				toast.error(result.error, { id: toastId });
+				toast.error(result.error);
 			}
 		} finally {
 			setState("loading", false);
@@ -122,7 +113,6 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 	}
 
 	async function updateAll() {
-		const toastId = toast.loading("Updating flake.lock...");
 		setState("loading", true);
 
 		for (const input of state.inputs) {
@@ -149,25 +139,17 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			}
 
 			if (result.ok) {
-				toast.success("flake.lock updated", { id: toastId });
 				await refresh();
 			} else {
-				toast.error(result.error, { id: toastId });
+				toast.error(result.error);
 			}
 		} finally {
 			setState("loading", false);
 		}
 	}
 
-	async function lockToCommit(
-		inputName: string,
-		sha: string,
-		owner: string,
-		repo: string,
-	): Promise<boolean> {
-		const toastId = toast.loading(
-			`Locking ${inputName} to ${sha.substring(0, 7)}...`,
-		);
+	async function lockToCommit(inputName: string, sha: string, owner: string, repo: string): Promise<boolean> {
+		const toastId = toast.loading(`Locking ${inputName} to ${sha.substring(0, 7)}...`);
 
 		const result = await flakeService.lockInputToRev(state.path, inputName, sha, owner, repo);
 

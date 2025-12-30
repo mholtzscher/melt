@@ -1,9 +1,5 @@
 import type { CliRenderer } from "@opentui/core";
-import {
-	toast as baseToast,
-	TOAST_DURATION,
-	ToasterRenderable,
-} from "@opentui-ui/toast";
+import { toast as baseToast, TOAST_DURATION, ToasterRenderable } from "@opentui-ui/toast";
 import { theme } from "../theme";
 
 let toaster: ToasterRenderable | null = null;
@@ -81,40 +77,28 @@ export const toast = {
 		}
 		return baseToast.loading(message, opts);
 	},
-	success(
-		message: Parameters<typeof baseToast.success>[0],
-		opts?: Parameters<typeof baseToast.success>[1],
-	): void {
+	success(message: Parameters<typeof baseToast.success>[0], opts?: Parameters<typeof baseToast.success>[1]): void {
 		if (!toaster) {
 			pendingQueue.push(() => baseToast.success(message, opts));
 			return;
 		}
 		baseToast.success(message, opts);
 	},
-	error(
-		message: Parameters<typeof baseToast.error>[0],
-		opts?: Parameters<typeof baseToast.error>[1],
-	): void {
+	error(message: Parameters<typeof baseToast.error>[0], opts?: Parameters<typeof baseToast.error>[1]): void {
 		if (!toaster) {
 			pendingQueue.push(() => baseToast.error(message, opts));
 			return;
 		}
 		baseToast.error(message, opts);
 	},
-	warning(
-		message: Parameters<typeof baseToast.warning>[0],
-		opts?: Parameters<typeof baseToast.warning>[1],
-	): void {
+	warning(message: Parameters<typeof baseToast.warning>[0], opts?: Parameters<typeof baseToast.warning>[1]): void {
 		if (!toaster) {
 			pendingQueue.push(() => baseToast.warning(message, opts));
 			return;
 		}
 		baseToast.warning(message, opts);
 	},
-	info(
-		message: Parameters<typeof baseToast.info>[0],
-		opts?: Parameters<typeof baseToast.info>[1],
-	): void {
+	info(message: Parameters<typeof baseToast.info>[0], opts?: Parameters<typeof baseToast.info>[1]): void {
 		if (!toaster) {
 			pendingQueue.push(() => baseToast.info(message, opts));
 			return;

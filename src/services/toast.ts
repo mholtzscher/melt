@@ -37,19 +37,16 @@ export function mountToaster(renderer: CliRenderer): void {
 }
 
 export const toast = {
-	loading(
-		message: Parameters<typeof baseToast.loading>[0],
-		opts?: Parameters<typeof baseToast.loading>[1],
-	): string | number | undefined {
-		return baseToast.loading(message, opts);
+	loading(message: string, id?: string | number): string | number | undefined {
+		return baseToast.loading(message, id !== undefined ? { id } : undefined);
 	},
-	success(message: Parameters<typeof baseToast.success>[0], opts?: Parameters<typeof baseToast.success>[1]): void {
-		baseToast.success(message, opts);
+	success(message: string, id?: string | number): void {
+		baseToast.success(message, id !== undefined ? { id } : undefined);
 	},
-	error(message: Parameters<typeof baseToast.error>[0], opts?: Parameters<typeof baseToast.error>[1]): void {
-		baseToast.error(message, opts);
+	error(message: string, id?: string | number): void {
+		baseToast.error(message, id !== undefined ? { id } : undefined);
 	},
-	warning(message: Parameters<typeof baseToast.warning>[0], opts?: Parameters<typeof baseToast.warning>[1]): void {
-		baseToast.warning(message, opts);
+	warning(message: string, id?: string | number): void {
+		baseToast.warning(message, id !== undefined ? { id } : undefined);
 	},
 };

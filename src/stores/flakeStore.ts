@@ -112,12 +112,12 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			}
 
 			for (const [id, message] of toastsById) {
-				toast.error(message, { id });
+				toast.error(message, id);
 			}
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
 			const toastMeta = getErrorToast(errorMsg);
-			toast.error(toastMeta.message, { id: toastMeta.id });
+			toast.error(toastMeta.message, toastMeta.id);
 		} finally {
 			isCheckingUpdates = false;
 		}
@@ -217,12 +217,10 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		const result = await flakeService.lockInputToRev(state.path, inputName, sha, owner, repo);
 
 		if (result.ok) {
-			toast.success(`Locked ${inputName} to ${sha.substring(0, 7)}`, {
-				id: toastId,
-			});
+			toast.success(`Locked ${inputName} to ${sha.substring(0, 7)}`, toastId);
 			return true;
 		}
-		toast.error(result.error, { id: toastId });
+		toast.error(result.error, toastId);
 		return false;
 	}
 

@@ -46,7 +46,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 
 		const toCheck = inputsList || state.inputs;
 
-		checkingToastId = toast.loading("Checking for updates...");
+		checkingToastId = toast.loading("Checking inputs for updates...");
 
 		try {
 			await githubService.checkForUpdates(toCheck, (name, status) => {
@@ -66,13 +66,15 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 	}
 
 	async function refresh() {
+		const toastId = toast.loading("Reloading flake...");
 		const result = await flakeService.refresh(state.path);
 		if (!result.ok) {
-			toast.error(result.error);
+			toast.error(result.error, { id: toastId });
 			return;
 		}
 
 		setState("inputs", result.data.inputs);
+		toast.success("Flake reloaded", { id: toastId });
 		await checkUpdates(result.data.inputs);
 	}
 
@@ -120,7 +122,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 	}
 
 	async function updateAll() {
-		const toastId = toast.loading("Updating all inputs...");
+		const toastId = toast.loading("Updating flake.lock...");
 		setState("loading", true);
 
 		for (const input of state.inputs) {
@@ -147,7 +149,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			}
 
 			if (result.ok) {
-				toast.success("All inputs updated", { id: toastId });
+				toast.success("flake.lock updated", { id: toastId });
 				await refresh();
 			} else {
 				toast.error(result.error, { id: toastId });

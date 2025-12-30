@@ -38,7 +38,7 @@ export function mountToaster(renderer: CliRenderer): void {
 }
 
 export const toast = {
-	loading(message: string, id?: string | number): string | number | undefined {
+	loading(message: string, id?: string | number): string | number {
 		return baseToast.loading(message, id !== undefined ? { id } : undefined);
 	},
 	success(message: string, id?: string | number): void {

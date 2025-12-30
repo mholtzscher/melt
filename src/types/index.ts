@@ -61,7 +61,6 @@ export interface GitHubCommit {
 
 // Update status for flake inputs
 export interface UpdateStatus {
-	hasUpdate: boolean;
 	commitsBehind: number;
 	loading: boolean;
 	updating?: boolean;

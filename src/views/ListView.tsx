@@ -41,7 +41,7 @@ function StatusCell(props: StatusCellProps) {
 			<Match when={props.status?.error}>
 				<text fg={theme.warning}>?</text>
 			</Match>
-			<Match when={props.status?.hasUpdate}>
+			<Match when={props.status?.commitsBehind}>
 				<text fg={theme.success}>+{props.status?.commitsBehind}</text>
 			</Match>
 		</Switch>

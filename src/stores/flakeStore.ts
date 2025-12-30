@@ -82,7 +82,6 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			for (const name of names) {
 				setState("updateStatuses", name, (prev) => ({
 					...prev,
-					hasUpdate: prev?.hasUpdate ?? false,
 					commitsBehind: prev?.commitsBehind ?? 0,
 					loading: prev?.loading ?? false,
 					updating: true,
@@ -96,7 +95,6 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			for (const name of names) {
 				setState("updateStatuses", name, (prev) => ({
 					...prev,
-					hasUpdate: prev?.hasUpdate ?? false,
 					commitsBehind: prev?.commitsBehind ?? 0,
 					loading: prev?.loading ?? false,
 					updating: false,
@@ -116,7 +114,6 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			for (const input of state.inputs) {
 				setState("updateStatuses", input.name, (prev) => ({
 					...prev,
-					hasUpdate: prev?.hasUpdate ?? false,
 					commitsBehind: prev?.commitsBehind ?? 0,
 					loading: prev?.loading ?? false,
 					updating: true,
@@ -130,7 +127,6 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			for (const input of state.inputs) {
 				setState("updateStatuses", input.name, (prev) => ({
 					...prev,
-					hasUpdate: prev?.hasUpdate ?? false,
 					commitsBehind: prev?.commitsBehind ?? 0,
 					loading: prev?.loading ?? false,
 					updating: false,

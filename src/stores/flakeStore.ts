@@ -83,8 +83,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 				setState("updateStatuses", name, (prev) => ({
 					...prev,
 					commitsBehind: prev?.commitsBehind ?? 0,
-					loading: prev?.loading ?? false,
-					updating: true,
+					loading: true,
 				}));
 			}
 		});
@@ -96,8 +95,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 				setState("updateStatuses", name, (prev) => ({
 					...prev,
 					commitsBehind: prev?.commitsBehind ?? 0,
-					loading: prev?.loading ?? false,
-					updating: false,
+					loading: false,
 				}));
 			}
 		});
@@ -115,8 +113,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 				setState("updateStatuses", input.name, (prev) => ({
 					...prev,
 					commitsBehind: prev?.commitsBehind ?? 0,
-					loading: prev?.loading ?? false,
-					updating: true,
+					loading: true,
 				}));
 			}
 		});
@@ -128,8 +125,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 				setState("updateStatuses", input.name, (prev) => ({
 					...prev,
 					commitsBehind: prev?.commitsBehind ?? 0,
-					loading: prev?.loading ?? false,
-					updating: false,
+					loading: false,
 				}));
 			}
 		});

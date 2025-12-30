@@ -63,6 +63,5 @@ export interface GitHubCommit {
 export interface UpdateStatus {
 	commitsBehind: number;
 	loading: boolean;
-	updating?: boolean;
 	error?: string;
 }

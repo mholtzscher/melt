@@ -46,23 +46,13 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		const toCheck = inputsList || state.inputs;
 
 		try {
-			const errorsByType = new Set<string>();
 			await githubService.checkForUpdates(toCheck, (name, status) => {
 				setState("updateStatuses", name, status);
 				if (status.error) {
-					errorsByType.add(status.error);
+					const toastMeta = toastForError(status.error);
+					toast.error(toastMeta.message, toastMeta.id);
 				}
 			});
-
-			const toastsById = new Map<string, string>();
-			for (const error of errorsByType) {
-				const toastMeta = toastForError(error);
-				toastsById.set(toastMeta.id, toastMeta.message);
-			}
-
-			for (const [id, message] of toastsById) {
-				toast.error(message, id);
-			}
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
 			const toastMeta = toastForError(errorMsg);

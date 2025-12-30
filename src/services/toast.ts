@@ -1,14 +1,15 @@
 import type { CliRenderer } from "@opentui/core";
-import { TOAST_DURATION, ToasterRenderable, toast as baseToast } from "@opentui-ui/toast";
+import {
+	toast as baseToast,
+	TOAST_DURATION,
+	ToasterRenderable,
+} from "@opentui-ui/toast";
 import { theme } from "../theme";
 
-type ToastId = string | number;
-type LoadingOptions = NonNullable<Parameters<typeof baseToast.loading>[1]>;
-
-let initialized = false;
+let toaster: ToasterRenderable | null = null;
 const pendingQueue: Array<() => void> = [];
 
-function generateToastId(): ToastId {
+function generateToastId(): string | number {
 	if (typeof globalThis.crypto?.randomUUID === "function") {
 		return globalThis.crypto.randomUUID();
 	}
@@ -23,20 +24,15 @@ function flushQueue() {
 }
 
 export function initToaster(renderer: CliRenderer): void {
-	if (initialized) return;
+	if (toaster) return;
 
-	const t = new ToasterRenderable(renderer, {
+	toaster = new ToasterRenderable(renderer, {
 		position: "top-right",
 		gap: 1,
 		stackingMode: "stack",
 		visibleToasts: 3,
 		maxWidth: 50,
-		offset: {
-			top: 1,
-			right: 2,
-			bottom: 1,
-			left: 2,
-		},
+		offset: { top: 1, right: 2, bottom: 1, left: 2 },
 		toastOptions: {
 			style: {
 				backgroundColor: theme.bg,
@@ -69,8 +65,7 @@ export function initToaster(renderer: CliRenderer): void {
 		},
 	});
 
-	renderer.root.add(t);
-	initialized = true;
+	renderer.root.add(toaster);
 	flushQueue();
 }
 
@@ -78,11 +73,10 @@ export const toast = {
 	loading(
 		message: Parameters<typeof baseToast.loading>[0],
 		opts?: Parameters<typeof baseToast.loading>[1],
-	): ReturnType<typeof baseToast.loading> {
-		if (!initialized) {
-			const id = (opts as { id?: ToastId } | undefined)?.id ?? generateToastId();
-			const optsWithId: LoadingOptions = { ...((opts ?? {}) as LoadingOptions), id };
-			pendingQueue.push(() => baseToast.loading(message, optsWithId));
+	): string | number | undefined {
+		if (!toaster) {
+			const id = opts?.id ?? generateToastId();
+			pendingQueue.push(() => baseToast.loading(message, { ...opts, id }));
 			return id;
 		}
 		return baseToast.loading(message, opts);
@@ -91,7 +85,7 @@ export const toast = {
 		message: Parameters<typeof baseToast.success>[0],
 		opts?: Parameters<typeof baseToast.success>[1],
 	): void {
-		if (!initialized) {
+		if (!toaster) {
 			pendingQueue.push(() => baseToast.success(message, opts));
 			return;
 		}
@@ -101,7 +95,7 @@ export const toast = {
 		message: Parameters<typeof baseToast.error>[0],
 		opts?: Parameters<typeof baseToast.error>[1],
 	): void {
-		if (!initialized) {
+		if (!toaster) {
 			pendingQueue.push(() => baseToast.error(message, opts));
 			return;
 		}
@@ -111,7 +105,7 @@ export const toast = {
 		message: Parameters<typeof baseToast.warning>[0],
 		opts?: Parameters<typeof baseToast.warning>[1],
 	): void {
-		if (!initialized) {
+		if (!toaster) {
 			pendingQueue.push(() => baseToast.warning(message, opts));
 			return;
 		}
@@ -121,14 +115,14 @@ export const toast = {
 		message: Parameters<typeof baseToast.info>[0],
 		opts?: Parameters<typeof baseToast.info>[1],
 	): void {
-		if (!initialized) {
+		if (!toaster) {
 			pendingQueue.push(() => baseToast.info(message, opts));
 			return;
 		}
 		baseToast.info(message, opts);
 	},
 	dismiss(id?: Parameters<typeof baseToast.dismiss>[0]): void {
-		if (!initialized) {
+		if (!toaster) {
 			pendingQueue.push(() => baseToast.dismiss(id));
 			return;
 		}

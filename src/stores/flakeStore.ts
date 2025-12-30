@@ -39,18 +39,12 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 
 	let isCheckingUpdates = false;
 	let checkingToastId: string | number | undefined;
-	let hasShownTokenHint = false;
 
 	async function checkUpdates(inputsList?: FlakeInput[]) {
 		if (isCheckingUpdates) return;
 		isCheckingUpdates = true;
 
 		const toCheck = inputsList || state.inputs;
-
-		if (!hasShownTokenHint && !githubService.hasGitHubToken()) {
-			hasShownTokenHint = true;
-			toast.info("Set GITHUB_TOKEN for higher rate limits");
-		}
 
 		checkingToastId = toast.loading("Checking for updates...");
 

@@ -226,7 +226,7 @@ export function ListView(props: ListViewProps) {
 
 	return (
 		<box flexDirection="column" flexGrow={1}>
-			<box flexDirection="column" flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border}>
+			<box flexDirection="column" flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border} title={state.path}>
 				<box flexDirection="column" paddingLeft={1} paddingRight={1} flexShrink={0}>
 					<TableHeader />
 				</box>

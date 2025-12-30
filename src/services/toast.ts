@@ -65,10 +65,4 @@ export const toast = {
 	warning(message: Parameters<typeof baseToast.warning>[0], opts?: Parameters<typeof baseToast.warning>[1]): void {
 		baseToast.warning(message, opts);
 	},
-	info(message: Parameters<typeof baseToast.info>[0], opts?: Parameters<typeof baseToast.info>[1]): void {
-		baseToast.info(message, opts);
-	},
-	dismiss(id?: Parameters<typeof baseToast.dismiss>[0]): void {
-		baseToast.dismiss(id);
-	},
 };

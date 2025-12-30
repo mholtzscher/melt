@@ -60,50 +60,21 @@ export interface ToastMeta {
 export function toastForError(errorMsg: string): ToastMeta {
 	const normalized = errorMsg.toLowerCase();
 
-	if (normalized.includes("rate limit")) {
-		return {
-			id: "error:rate-limit",
-			message: "GitHub rate limit exceeded; set GITHUB_TOKEN",
-		};
+	const errorPatterns: Array<{ pattern: string | RegExp; result: ToastMeta }> = [
+		{ pattern: "rate limit", result: { id: "error:rate-limit", message: "GitHub rate limit exceeded; set GITHUB_TOKEN" } },
+		{ pattern: /bad credentials|requires authentication/, result: { id: "error:auth", message: "GitHub authentication failed - check GITHUB_TOKEN" } },
+		{ pattern: /404|not found/, result: { id: "error:not-found", message: "GitHub repository not found" } },
+		{ pattern: /fetch failed|enotfound|network/, result: { id: "error:network", message: "Network error checking GitHub" } },
+		{ pattern: "missing owner or repo", result: { id: "error:missing-owner-repo", message: "Invalid GitHub input (missing owner/repo)" } },
+		{ pattern: "github api error", result: { id: "error:github-api", message: "GitHub API error checking updates" } },
+	];
+
+	for (const { pattern, result } of errorPatterns) {
+		const matches = typeof pattern === "string" ? normalized.includes(pattern) : pattern.test(normalized);
+		if (matches) {
+			return result;
+		}
 	}
 
-	if (normalized.includes("bad credentials") || normalized.includes("requires authentication")) {
-		return {
-			id: "error:auth",
-			message: "GitHub authentication failed - check GITHUB_TOKEN",
-		};
-	}
-
-	if (normalized.includes("404") || normalized.includes("not found")) {
-		return {
-			id: "error:not-found",
-			message: "GitHub repository not found",
-		};
-	}
-
-	if (normalized.includes("fetch failed") || normalized.includes("enotfound") || normalized.includes("network")) {
-		return {
-			id: "error:network",
-			message: "Network error checking GitHub",
-		};
-	}
-
-	if (normalized.includes("missing owner or repo")) {
-		return {
-			id: "error:missing-owner-repo",
-			message: "Invalid GitHub input (missing owner/repo)",
-		};
-	}
-
-	if (normalized.includes("github api error")) {
-		return {
-			id: "error:github-api",
-			message: "GitHub API error checking updates",
-		};
-	}
-
-	return {
-		id: "error:unknown",
-		message: "Error checking updates",
-	};
+	return { id: "error:unknown", message: "Error checking updates" };
 }

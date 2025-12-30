@@ -29,8 +29,8 @@
 	"dependencies": {
 		"@babel/core": "^7.28.5",
 		"@babel/preset-typescript": "^7.28.5",
-		"@opentui/core": "^0.1.63",
-		"@opentui/solid": "^0.1.63",
+		"@opentui/core": "^0.1.66",
+		"@opentui/solid": "^0.1.66",
 		"babel-preset-solid": "^1.9.10",
 		"cmd-ts": "^0.14.3",
 		"opentui-spinner": "^0.0.6",

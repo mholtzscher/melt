@@ -14,6 +14,71 @@ export interface ChangelogViewProps {
 	input: FlakeInput;
 }
 
+interface CommitRowProps {
+	commit: GitHubCommit;
+	isCursor: boolean;
+	isLocked: boolean;
+}
+
+function CommitRow(props: CommitRowProps) {
+	return (
+		<box flexDirection="row" backgroundColor={props.isCursor ? theme.bgHighlight : undefined}>
+			<box width={3}>
+				<text fg={theme.warning}>{props.isLocked ? "\u{1F512}" : "  "}</text>
+			</box>
+
+			<box width={9}>
+				<text fg={props.isLocked ? theme.warning : theme.sha}>{props.commit.shortSha}</text>
+			</box>
+
+			<box width={16}>
+				<text fg={theme.info}>
+					{props.commit.author.length > 14
+						? `${props.commit.author.substring(0, 14)}..`
+						: props.commit.author.padEnd(14)}
+				</text>
+			</box>
+
+			<box width={10}>
+				<text fg={theme.textDim}>{props.commit.date.padEnd(8)}</text>
+			</box>
+
+			<text
+				fg={props.isCursor ? theme.cursor : props.isLocked ? theme.warning : theme.text}
+				attributes={props.isCursor || props.isLocked ? 1 : 0}
+			>
+				{props.commit.message.length > 55 ? `${props.commit.message.substring(0, 55)}...` : props.commit.message}
+			</text>
+		</box>
+	);
+}
+
+interface CommitStatsProps {
+	lockedIndex: number;
+	totalCommits: number;
+}
+
+function CommitStats(props: CommitStatsProps) {
+	return (
+		<box flexDirection="row" marginLeft={2}>
+			<text fg={theme.success}>+{props.lockedIndex} new</text>
+			<text fg={theme.warning}> {"\u{1F512}"} </text>
+			<text fg={theme.textMuted}>{Math.max(0, props.totalCommits - props.lockedIndex - 1)} older</text>
+		</box>
+	);
+}
+
+function ChangelogLoading() {
+	return (
+		<box flexDirection="column" flexGrow={1} justifyContent="center" alignItems="center">
+			<box flexDirection="row">
+				<spinner name="dots" color={theme.accent} />
+				<text fg={theme.text}> Loading commits...</text>
+			</box>
+		</box>
+	);
+}
+
 export function ChangelogView(props: ChangelogViewProps) {
 	const { actions } = props.store;
 	let scrollBoxRef: ScrollBoxRenderable | undefined;
@@ -128,86 +193,46 @@ export function ChangelogView(props: ChangelogViewProps) {
 	return (
 		<box flexDirection="column" flexGrow={1}>
 			<box
-				flexDirection="row"
-				paddingLeft={1}
-				paddingRight={1}
-				flexShrink={0}
+				flexGrow={1}
+				flexShrink={1}
 				borderStyle="rounded"
 				borderColor={theme.border}
+				title={`${props.input.name} (${props.input.url})`}
 			>
-				<text fg={theme.accent} attributes={1}>
-					Changelog: {props.input.name}
-				</text>
-				<text fg={theme.textDim}> ({props.input.url})</text>
-			</box>
+				<Show when={loading()}>
+					<ChangelogLoading />
+				</Show>
 
-			<Show when={loading()}>
-				<box paddingLeft={1} flexGrow={1}>
-					<text fg={theme.warning}>Loading commits...</text>
-				</box>
-			</Show>
-
-			<Show when={!loading()}>
-				<Show
-					when={commits().length > 0}
-					fallback={
-						<box paddingLeft={1} flexGrow={1}>
-							<text fg={theme.success}>Already up to date!</text>
-						</box>
-					}
-				>
-					<box flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border}>
+				<Show when={!loading()}>
+					<Show
+						when={commits().length > 0}
+						fallback={
+							<box paddingLeft={1} flexGrow={1}>
+								<text fg={theme.success}>Already up to date!</text>
+							</box>
+						}
+					>
 						<scrollbox ref={scrollBoxRef} flexGrow={1} paddingLeft={1} paddingRight={1} overflow="hidden">
 							<box flexDirection="column">
 								<For each={commits()}>
-									{(commit, index) => {
-										const isCursor = () => cursorIndex() === index();
-										const isLocked = () => commit.isLocked === true;
-
-										return (
-											<box flexDirection="row" backgroundColor={isCursor() ? theme.bgHighlight : undefined}>
-												<box width={3}>
-													<text fg={theme.warning}>{isLocked() ? "\u{1F512}" : "  "}</text>
-												</box>
-
-												<box width={9}>
-													<text fg={isLocked() ? theme.warning : theme.sha}>{commit.shortSha}</text>
-												</box>
-
-												<box width={16}>
-													<text fg={theme.info}>
-														{commit.author.length > 14
-															? `${commit.author.substring(0, 14)}..`
-															: commit.author.padEnd(14)}
-													</text>
-												</box>
-
-												<box width={10}>
-													<text fg={theme.textDim}>{commit.date.padEnd(8)}</text>
-												</box>
-
-												<text
-													fg={isCursor() ? theme.cursor : isLocked() ? theme.warning : theme.text}
-													attributes={isCursor() || isLocked() ? 1 : 0}
-												>
-													{commit.message.length > 55 ? `${commit.message.substring(0, 55)}...` : commit.message}
-												</text>
-											</box>
-										);
-									}}
+									{(commit, index) => (
+										<CommitRow
+											commit={commit}
+											isCursor={cursorIndex() === index()}
+											isLocked={commit.isLocked === true}
+										/>
+									)}
 								</For>
 							</box>
 						</scrollbox>
-					</box>
+					</Show>
 				</Show>
-			</Show>
+			</box>
 
 			<HelpBar shortcuts={shortcuts.changelog}>
-				<box flexDirection="row" marginLeft={2}>
-					<text fg={theme.success}>+{lockedIndex()} new</text>
-					<text fg={theme.warning}> {"\u{1F512}"} </text>
-					<text fg={theme.textMuted}>{commits().length - lockedIndex() - 1} older</text>
-				</box>
+				<Show when={!loading() && commits().length > 0}>
+					<CommitStats lockedIndex={lockedIndex()} totalCommits={commits().length} />
+				</Show>
 			</HelpBar>
 
 			<ConfirmDialog visible={showConfirm} inputName={() => props.input.name} commit={confirmCommit} />

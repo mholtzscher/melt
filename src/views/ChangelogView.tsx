@@ -23,9 +23,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 	const [cursorIndex, setCursorIndex] = createSignal(0);
 	const [loading, setLoading] = createSignal(true);
 	const [showConfirm, setShowConfirm] = createSignal(false);
-	const [confirmCommit, setConfirmCommit] = createSignal<
-		GitHubCommit | undefined
-	>();
+	const [confirmCommit, setConfirmCommit] = createSignal<GitHubCommit | undefined>();
 
 	createEffect(() => {
 		const cursor = cursorIndex();
@@ -84,12 +82,7 @@ export function ChangelogView(props: ChangelogViewProps) {
 		const { owner, repo } = props.input;
 		if (!commit || !owner || !repo) return;
 		hideConfirmDialog();
-		const success = await actions.lockToCommit(
-			props.input.name,
-			commit.sha,
-			owner,
-			repo,
-		);
+		const success = await actions.lockToCommit(props.input.name, commit.sha, owner, repo);
 		if (success) {
 			actions.closeChangelog();
 			actions.refresh();
@@ -163,19 +156,8 @@ export function ChangelogView(props: ChangelogViewProps) {
 						</box>
 					}
 				>
-					<box
-						flexGrow={1}
-						flexShrink={1}
-						borderStyle="rounded"
-						borderColor={theme.border}
-					>
-						<scrollbox
-							ref={scrollBoxRef}
-							flexGrow={1}
-							paddingLeft={1}
-							paddingRight={1}
-							overflow="hidden"
-						>
+					<box flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border}>
+						<scrollbox ref={scrollBoxRef} flexGrow={1} paddingLeft={1} paddingRight={1} overflow="hidden">
 							<box flexDirection="column">
 								<For each={commits()}>
 									{(commit, index) => {
@@ -183,22 +165,13 @@ export function ChangelogView(props: ChangelogViewProps) {
 										const isLocked = () => commit.isLocked === true;
 
 										return (
-											<box
-												flexDirection="row"
-												backgroundColor={
-													isCursor() ? theme.bgHighlight : undefined
-												}
-											>
+											<box flexDirection="row" backgroundColor={isCursor() ? theme.bgHighlight : undefined}>
 												<box width={3}>
-													<text fg={theme.warning}>
-														{isLocked() ? "\u{1F512}" : "  "}
-													</text>
+													<text fg={theme.warning}>{isLocked() ? "\u{1F512}" : "  "}</text>
 												</box>
 
 												<box width={9}>
-													<text fg={isLocked() ? theme.warning : theme.sha}>
-														{commit.shortSha}
-													</text>
+													<text fg={isLocked() ? theme.warning : theme.sha}>{commit.shortSha}</text>
 												</box>
 
 												<box width={16}>
@@ -210,24 +183,14 @@ export function ChangelogView(props: ChangelogViewProps) {
 												</box>
 
 												<box width={10}>
-													<text fg={theme.textDim}>
-														{commit.date.padEnd(8)}
-													</text>
+													<text fg={theme.textDim}>{commit.date.padEnd(8)}</text>
 												</box>
 
 												<text
-													fg={
-														isCursor()
-															? theme.cursor
-															: isLocked()
-																? theme.warning
-																: theme.text
-													}
+													fg={isCursor() ? theme.cursor : isLocked() ? theme.warning : theme.text}
 													attributes={isCursor() || isLocked() ? 1 : 0}
 												>
-													{commit.message.length > 55
-														? `${commit.message.substring(0, 55)}...`
-														: commit.message}
+													{commit.message.length > 55 ? `${commit.message.substring(0, 55)}...` : commit.message}
 												</text>
 											</box>
 										);
@@ -239,25 +202,15 @@ export function ChangelogView(props: ChangelogViewProps) {
 				</Show>
 			</Show>
 
-			<HelpBar
-				statusMessage={() => state.statusMessage}
-				loading={() => state.loading}
-				shortcuts={shortcuts.changelog}
-			>
+			<HelpBar statusMessage={() => state.statusMessage} loading={() => state.loading} shortcuts={shortcuts.changelog}>
 				<box flexDirection="row" marginLeft={2}>
 					<text fg={theme.success}>+{lockedIndex()} new</text>
 					<text fg={theme.warning}> {"\u{1F512}"} </text>
-					<text fg={theme.textMuted}>
-						{commits().length - lockedIndex() - 1} older
-					</text>
+					<text fg={theme.textMuted}>{commits().length - lockedIndex() - 1} older</text>
 				</box>
 			</HelpBar>
 
-			<ConfirmDialog
-				visible={showConfirm}
-				inputName={() => props.input.name}
-				commit={confirmCommit}
-			/>
+			<ConfirmDialog visible={showConfirm} inputName={() => props.input.name} commit={confirmCommit} />
 		</box>
 	);
 }

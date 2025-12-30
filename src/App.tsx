@@ -26,13 +26,7 @@ function LoadingScreen(props: { onQuit: () => void }) {
 	});
 
 	return (
-		<box
-			flexDirection="column"
-			flexGrow={1}
-			justifyContent="center"
-			alignItems="center"
-			backgroundColor={theme.bg}
-		>
+		<box flexDirection="column" flexGrow={1} justifyContent="center" alignItems="center" backgroundColor={theme.bg}>
 			<box flexDirection="column" alignItems="center">
 				<box flexDirection="row">
 					<spinner name="dots" color={theme.accent} />
@@ -51,13 +45,7 @@ function ErrorScreen(props: { error: string; onQuit: () => void }) {
 	});
 
 	return (
-		<box
-			flexDirection="column"
-			flexGrow={1}
-			justifyContent="center"
-			alignItems="center"
-			backgroundColor={theme.bg}
-		>
+		<box flexDirection="column" flexGrow={1} justifyContent="center" alignItems="center" backgroundColor={theme.bg}>
 			<text fg={theme.error}>Error: {props.error}</text>
 			<text fg={theme.textDim}>Press any key to exit</text>
 		</box>
@@ -86,16 +74,11 @@ export function App(props: AppProps) {
 
 	return (
 		<Switch>
-			<Match
-				when={flakeData.state === "pending" || flakeData.state === "unresolved"}
-			>
+			<Match when={flakeData.state === "pending" || flakeData.state === "unresolved"}>
 				<LoadingScreen onQuit={quit} />
 			</Match>
 			<Match when={flakeData.state === "errored"}>
-				<ErrorScreen
-					error={toErrorMessage(flakeData.error)}
-					onQuit={() => quit(1)}
-				/>
+				<ErrorScreen error={toErrorMessage(flakeData.error)} onQuit={() => quit(1)} />
 			</Match>
 			<Match when={flakeData.state === "ready" && flakeData()}>
 				{(data: () => FlakeData) => <MainView flake={data()} onQuit={quit} />}
@@ -122,9 +105,7 @@ function MainView(props: MainViewProps) {
 				<ListView store={{ state, actions }} onQuit={props.onQuit} />
 			</Show>
 			<Show when={state.changelogInput}>
-				{(input: () => FlakeInput) => (
-					<ChangelogView store={{ state, actions }} input={input()} />
-				)}
+				{(input: () => FlakeInput) => <ChangelogView store={{ state, actions }} input={input()} />}
 			</Show>
 		</box>
 	);

@@ -1,12 +1,7 @@
 import type { FlakeInput, GitHubCommit, UpdateStatus } from "../types";
 
 export interface GitHubService {
-	getCommitsSinceRev(
-		owner: string,
-		repo: string,
-		sinceRev: string,
-		ref?: string,
-	): Promise<GitHubCommit[]>;
+	getCommitsSinceRev(owner: string, repo: string, sinceRev: string, ref?: string): Promise<GitHubCommit[]>;
 	getCommitHistory(
 		owner: string,
 		repo: string,
@@ -14,9 +9,7 @@ export interface GitHubService {
 		ref?: string,
 		behindLimit?: number,
 	): Promise<{ commits: GitHubCommit[]; lockedIndex: number }>;
-	getChangelog(
-		input: FlakeInput,
-	): Promise<{ commits: GitHubCommit[]; lockedIndex: number }>;
+	getChangelog(input: FlakeInput): Promise<{ commits: GitHubCommit[]; lockedIndex: number }>;
 	checkForUpdates(
 		inputs: FlakeInput[],
 		onStatusChange?: (name: string, status: UpdateStatus) => void,
@@ -29,8 +22,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Get GitHub token from environment for higher rate limits
 // Supports GITHUB_TOKEN, GH_TOKEN, and GITHUB_PAT
-const GITHUB_TOKEN =
-	process.env.GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_PAT;
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_PAT;
 
 interface GitHubAPICommit {
 	sha: string;
@@ -128,9 +120,7 @@ async function getCommitsFromRev(
 					throw new Error("GitHub API rate limit exceeded");
 				}
 			}
-			throw new Error(
-				`GitHub API error: ${response.status} ${response.statusText}`,
-			);
+			throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
 		}
 
 		const data = (await response.json()) as GitHubAPICommit[];
@@ -172,12 +162,7 @@ async function checkForUpdate(input: FlakeInput): Promise<UpdateStatus> {
 	}
 
 	try {
-		const commits = await githubService.getCommitsSinceRev(
-			input.owner,
-			input.repo,
-			input.rev,
-			input.ref,
-		);
+		const commits = await githubService.getCommitsSinceRev(input.owner, input.repo, input.rev, input.ref);
 		return {
 			hasUpdate: commits.length > 0,
 			commitsBehind: commits.length,
@@ -198,12 +183,7 @@ export const githubService: GitHubService = {
 	 * Fetch commits from GitHub since a specific revision
 	 * Returns commits from HEAD back to (but not including) the specified rev
 	 */
-	async getCommitsSinceRev(
-		owner: string,
-		repo: string,
-		sinceRev: string,
-		ref?: string,
-	): Promise<GitHubCommit[]> {
+	async getCommitsSinceRev(owner: string, repo: string, sinceRev: string, ref?: string): Promise<GitHubCommit[]> {
 		const commits: GitHubCommit[] = [];
 		let page = 1;
 		const perPage = 100;
@@ -228,9 +208,7 @@ export const githubService: GitHubService = {
 						throw new Error("GitHub API rate limit exceeded");
 					}
 				}
-				throw new Error(
-					`GitHub API error: ${response.status} ${response.statusText}`,
-				);
+				throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
 			}
 
 			const data = (await response.json()) as GitHubAPICommit[];
@@ -274,20 +252,10 @@ export const githubService: GitHubService = {
 		behindLimit: number = 50,
 	): Promise<{ commits: GitHubCommit[]; lockedIndex: number }> {
 		// Fetch commits ahead of the locked rev (newer commits)
-		const commitsAhead = await this.getCommitsSinceRev(
-			owner,
-			repo,
-			lockedRev,
-			ref,
-		);
+		const commitsAhead = await this.getCommitsSinceRev(owner, repo, lockedRev, ref);
 
 		// Fetch commits from the locked rev and older
-		const commitsFromLocked = await getCommitsFromRev(
-			owner,
-			repo,
-			lockedRev,
-			behindLimit + 1,
-		);
+		const commitsFromLocked = await getCommitsFromRev(owner, repo, lockedRev, behindLimit + 1);
 
 		// Mark the first commit (the locked one) with isLocked flag
 		const lockedCommit = commitsFromLocked[0];
@@ -305,9 +273,7 @@ export const githubService: GitHubService = {
 	/**
 	 * Get changelog for a flake input (only works for GitHub inputs)
 	 */
-	async getChangelog(
-		input: FlakeInput,
-	): Promise<{ commits: GitHubCommit[]; lockedIndex: number }> {
+	async getChangelog(input: FlakeInput): Promise<{ commits: GitHubCommit[]; lockedIndex: number }> {
 		if (input.type !== "github" || !input.owner || !input.repo) {
 			throw new Error("Changelog is only available for GitHub inputs");
 		}
@@ -325,9 +291,7 @@ export const githubService: GitHubService = {
 		const results = new Map<string, UpdateStatus>();
 
 		// Filter to only GitHub inputs
-		const githubInputs = inputs.filter(
-			(input) => input.type === "github" && input.owner && input.repo,
-		);
+		const githubInputs = inputs.filter((input) => input.type === "github" && input.owner && input.repo);
 
 		for (const input of githubInputs) {
 			const loadingStatus: UpdateStatus = {

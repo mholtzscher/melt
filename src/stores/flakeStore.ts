@@ -18,12 +18,7 @@ export interface FlakeActions {
 	refresh: () => Promise<void>;
 	updateSelected: (names: string[]) => Promise<void>;
 	updateAll: () => Promise<void>;
-	lockToCommit: (
-		inputName: string,
-		sha: string,
-		owner: string,
-		repo: string,
-	) => Promise<boolean>;
+	lockToCommit: (inputName: string, sha: string, owner: string, repo: string) => Promise<boolean>;
 	showChangelog: (input: FlakeInput) => void;
 	closeChangelog: () => void;
 }
@@ -65,9 +60,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		isCheckingUpdates = true;
 
 		const toCheck = inputsList || state.inputs;
-		const tokenMsg = githubService.hasGitHubToken()
-			? ""
-			: " (set GITHUB_TOKEN for higher rate limits)";
+		const tokenMsg = githubService.hasGitHubToken() ? "" : " (set GITHUB_TOKEN for higher rate limits)";
 		setStatusMessage(`Checking for updates...${tokenMsg}`);
 
 		try {
@@ -176,21 +169,10 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		}
 	}
 
-	async function lockToCommit(
-		inputName: string,
-		sha: string,
-		owner: string,
-		repo: string,
-	): Promise<boolean> {
+	async function lockToCommit(inputName: string, sha: string, owner: string, repo: string): Promise<boolean> {
 		setStatusMessage(`Locking ${inputName} to ${sha.substring(0, 7)}...`);
 
-		const result = await flakeService.lockInputToRev(
-			state.path,
-			inputName,
-			sha,
-			owner,
-			repo,
-		);
+		const result = await flakeService.lockInputToRev(state.path, inputName, sha, owner, repo);
 
 		if (result.ok) {
 			setStatusMessage(`Locked ${inputName} to ${sha.substring(0, 7)}`, 3000);

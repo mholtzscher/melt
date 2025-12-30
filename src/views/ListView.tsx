@@ -60,32 +60,21 @@ function FlakeRow(props: FlakeRowProps) {
 	const badgeColor = getTypeBadgeColor(props.input.type);
 
 	return (
-		<box
-			flexDirection="row"
-			backgroundColor={props.isCursor ? theme.bgHighlight : undefined}
-		>
+		<box flexDirection="row" backgroundColor={props.isCursor ? theme.bgHighlight : undefined}>
 			<box width={columns.checkbox}>
-				<text
-					fg={props.isSelected ? theme.selected : theme.textDim}
-					attributes={props.isSelected ? 1 : 0}
-				>
+				<text fg={props.isSelected ? theme.selected : theme.textDim} attributes={props.isSelected ? 1 : 0}>
 					{props.isSelected ? "[x] " : "[ ] "}
 				</text>
 			</box>
 
 			<box width={columns.name}>
-				<text
-					fg={props.isCursor ? theme.cursor : theme.text}
-					attributes={props.isCursor ? 1 : 0}
-				>
+				<text fg={props.isCursor ? theme.cursor : theme.text} attributes={props.isCursor ? 1 : 0}>
 					{props.input.name}
 				</text>
 			</box>
 
 			<box width={columns.type}>
-				<text fg={badgeColor}>
-					{props.input.type.padEnd(columns.typePadding)}
-				</text>
+				<text fg={badgeColor}>{props.input.type.padEnd(columns.typePadding)}</text>
 			</box>
 
 			<box width={columns.rev}>
@@ -93,9 +82,7 @@ function FlakeRow(props: FlakeRowProps) {
 			</box>
 
 			<box width={columns.updated}>
-				<text fg={theme.textMuted}>
-					{timeService.formatRelativeTime(props.input.lastModified)}
-				</text>
+				<text fg={theme.textMuted}>{timeService.formatRelativeTime(props.input.lastModified)}</text>
 			</box>
 
 			<StatusCell status={props.status} />
@@ -148,9 +135,7 @@ export function ListView(props: ListViewProps) {
 	let scrollBoxRef: ScrollBoxRenderable | undefined;
 
 	const [cursorIndex, setCursorIndex] = createSignal(0);
-	const [selectedIndices, setSelectedIndices] = createSignal<Set<number>>(
-		new Set(),
-	);
+	const [selectedIndices, setSelectedIndices] = createSignal<Set<number>>(new Set());
 
 	createEffect(() => {
 		const cursor = cursorIndex();
@@ -255,19 +240,8 @@ export function ListView(props: ListViewProps) {
 				<TableHeader />
 			</box>
 
-			<box
-				flexGrow={1}
-				flexShrink={1}
-				borderStyle="rounded"
-				borderColor={theme.border}
-			>
-				<scrollbox
-					ref={scrollBoxRef}
-					flexGrow={1}
-					paddingLeft={1}
-					paddingRight={1}
-					overflow="hidden"
-				>
+			<box flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border}>
+				<scrollbox ref={scrollBoxRef} flexGrow={1} paddingLeft={1} paddingRight={1} overflow="hidden">
 					<box flexDirection="column">
 						<For each={state.inputs}>
 							{(input, index) => (
@@ -290,11 +264,7 @@ export function ListView(props: ListViewProps) {
 				</scrollbox>
 			</box>
 
-			<HelpBar
-				statusMessage={() => state.statusMessage}
-				loading={() => state.loading}
-				shortcuts={shortcuts.list}
-			>
+			<HelpBar statusMessage={() => state.statusMessage} loading={() => state.loading} shortcuts={shortcuts.list}>
 				<Show when={selectedIndices().size > 0}>
 					<box marginLeft={2}>
 						<text fg={theme.selected}>{selectedIndices().size} selected</text>

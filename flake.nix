@@ -91,6 +91,7 @@
       devShells = eachSystem (system: {
         default = pkgsFor.${system}.mkShell {
           packages = with pkgsFor.${system}; [
+            biome
             bun
             bun2nix
           ];

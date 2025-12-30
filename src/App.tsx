@@ -3,6 +3,7 @@ import { createResource, Match, onMount, Show, Switch } from "solid-js";
 import type { FlakeData } from "./services/flake";
 import { flakeService } from "./services/flake";
 import { processManager } from "./services/processManager";
+import { mountToaster } from "./services/toast";
 import { createFlakeStore } from "./stores/flakeStore";
 import { theme } from "./theme";
 import type { FlakeInput } from "./types";
@@ -54,6 +55,10 @@ function ErrorScreen(props: { error: string; onQuit: () => void }) {
 
 export function App(props: AppProps) {
 	const renderer = useRenderer();
+
+	onMount(() => {
+		mountToaster(renderer);
+	});
 
 	const [flakeData] = createResource(
 		() => props.flakePath ?? ".",

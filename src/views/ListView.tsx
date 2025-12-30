@@ -229,18 +229,11 @@ export function ListView(props: ListViewProps) {
 
 	return (
 		<box flexDirection="column" flexGrow={1}>
-			<box
-				flexDirection="column"
-				paddingLeft={1}
-				paddingRight={1}
-				flexShrink={0}
-				borderStyle="rounded"
-				borderColor={theme.border}
-			>
-				<TableHeader />
-			</box>
+			<box flexDirection="column" flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border}>
+				<box flexDirection="column" paddingLeft={1} paddingRight={1} flexShrink={0}>
+					<TableHeader />
+				</box>
 
-			<box flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border}>
 				<scrollbox ref={scrollBoxRef} flexGrow={1} paddingLeft={1} paddingRight={1} overflow="hidden">
 					<box flexDirection="column">
 						<For each={state.inputs}>

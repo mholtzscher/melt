@@ -1,5 +1,5 @@
 import type { CliRenderer } from "@opentui/core";
-import { toast as baseToast, TOAST_DURATION, ToasterRenderable } from "@opentui-ui/toast";
+import { toast as baseToast, ToasterRenderable } from "@opentui-ui/toast";
 import { theme } from "../theme";
 
 let toaster: ToasterRenderable | null = null;
@@ -14,25 +14,18 @@ export function mountToaster(renderer: CliRenderer): void {
 				foregroundColor: theme.text,
 				borderColor: theme.border,
 				borderStyle: "rounded",
-				paddingX: 1,
-				paddingY: 0,
 			},
-			duration: TOAST_DURATION.DEFAULT,
 			success: {
 				style: { borderColor: theme.success },
-				duration: TOAST_DURATION.SHORT,
 			},
 			error: {
 				style: { borderColor: theme.error },
-				duration: TOAST_DURATION.LONG,
 			},
 			warning: {
 				style: { borderColor: theme.warning },
-				duration: TOAST_DURATION.LONG,
 			},
 			info: {
 				style: { borderColor: theme.info },
-				duration: TOAST_DURATION.DEFAULT,
 			},
 			loading: {
 				style: { borderColor: theme.accent },

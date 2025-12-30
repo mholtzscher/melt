@@ -57,7 +57,7 @@ export interface ToastMeta {
 	message: string;
 }
 
-export function getErrorToast(errorMsg: string): ToastMeta {
+export function toastForError(errorMsg: string): ToastMeta {
 	const normalized = errorMsg.toLowerCase();
 
 	if (normalized.includes("rate limit")) {

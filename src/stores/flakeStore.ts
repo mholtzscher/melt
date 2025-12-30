@@ -2,7 +2,7 @@ import { createStore } from "solid-js/store";
 import type { FlakeData } from "../services/flake";
 import { flakeService } from "../services/flake";
 import { githubService } from "../services/github";
-import { toast, getErrorToast } from "../services/toast";
+import { toast, toastForError } from "../services/toast";
 import type { FlakeInput, UpdateStatus } from "../types";
 
 export interface FlakeState {
@@ -56,7 +56,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 
 			const toastsById = new Map<string, string>();
 			for (const error of errorsByType) {
-				const toastMeta = getErrorToast(error);
+				const toastMeta = toastForError(error);
 				toastsById.set(toastMeta.id, toastMeta.message);
 			}
 
@@ -65,7 +65,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			}
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
-			const toastMeta = getErrorToast(errorMsg);
+			const toastMeta = toastForError(errorMsg);
 			toast.error(toastMeta.message, toastMeta.id);
 		} finally {
 			isCheckingUpdates = false;

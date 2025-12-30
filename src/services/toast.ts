@@ -51,3 +51,59 @@ export const toast = {
 		baseToast.warning(message, id !== undefined ? { id } : undefined);
 	},
 };
+
+export interface ToastMeta {
+	id: string;
+	message: string;
+}
+
+export function getErrorToast(errorMsg: string): ToastMeta {
+	const normalized = errorMsg.toLowerCase();
+
+	if (normalized.includes("rate limit")) {
+		return {
+			id: "error:rate-limit",
+			message: "GitHub rate limit exceeded; set GITHUB_TOKEN",
+		};
+	}
+
+	if (normalized.includes("bad credentials") || normalized.includes("requires authentication")) {
+		return {
+			id: "error:auth",
+			message: "GitHub authentication failed - check GITHUB_TOKEN",
+		};
+	}
+
+	if (normalized.includes("404") || normalized.includes("not found")) {
+		return {
+			id: "error:not-found",
+			message: "GitHub repository not found",
+		};
+	}
+
+	if (normalized.includes("fetch failed") || normalized.includes("enotfound") || normalized.includes("network")) {
+		return {
+			id: "error:network",
+			message: "Network error checking GitHub",
+		};
+	}
+
+	if (normalized.includes("missing owner or repo")) {
+		return {
+			id: "error:missing-owner-repo",
+			message: "Invalid GitHub input (missing owner/repo)",
+		};
+	}
+
+	if (normalized.includes("github api error")) {
+		return {
+			id: "error:github-api",
+			message: "GitHub API error checking updates",
+		};
+	}
+
+	return {
+		id: "error:unknown",
+		message: "Error checking updates",
+	};
+}

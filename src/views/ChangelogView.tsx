@@ -15,7 +15,7 @@ export interface ChangelogViewProps {
 }
 
 export function ChangelogView(props: ChangelogViewProps) {
-	const { state, actions } = props.store;
+	const { actions } = props.store;
 	let scrollBoxRef: ScrollBoxRenderable | undefined;
 
 	const [commits, setCommits] = createSignal<GitHubCommit[]>([]);

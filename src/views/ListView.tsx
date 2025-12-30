@@ -32,9 +32,6 @@ function StatusCell(props: StatusCellProps) {
 			<Match when={!props.status}>
 				<text fg={theme.textDim}>-</text>
 			</Match>
-			<Match when={props.status?.updating}>
-				<spinner name="dots" color={theme.accent} />
-			</Match>
 			<Match when={props.status?.loading}>
 				<spinner name="dots" color={theme.textDim} />
 			</Match>

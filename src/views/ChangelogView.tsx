@@ -63,7 +63,7 @@ function CommitStats(props: CommitStatsProps) {
 		<box flexDirection="row" marginLeft={2}>
 			<text fg={theme.success}>+{props.lockedIndex} new</text>
 			<text fg={theme.warning}> {"\u{1F512}"} </text>
-			<text fg={theme.textMuted}>{props.totalCommits - props.lockedIndex - 1} older</text>
+			<text fg={theme.textMuted}>{Math.max(0, props.totalCommits - props.lockedIndex - 1)} older</text>
 		</box>
 	);
 }

@@ -3,23 +3,8 @@ import { toast as baseToast, TOAST_DURATION, ToasterRenderable } from "@opentui-
 import { theme } from "../theme";
 
 let toaster: ToasterRenderable | null = null;
-const pendingQueue: Array<() => void> = [];
 
-function generateToastId(): string | number {
-	if (typeof globalThis.crypto?.randomUUID === "function") {
-		return globalThis.crypto.randomUUID();
-	}
-	return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function flushQueue() {
-	while (pendingQueue.length > 0) {
-		const fn = pendingQueue.shift();
-		fn?.();
-	}
-}
-
-export function initToaster(renderer: CliRenderer): void {
+export function mountToaster(renderer: CliRenderer): void {
 	if (toaster) return;
 
 	toaster = new ToasterRenderable(renderer, {
@@ -62,7 +47,6 @@ export function initToaster(renderer: CliRenderer): void {
 	});
 
 	renderer.root.add(toaster);
-	flushQueue();
 }
 
 export const toast = {
@@ -70,46 +54,21 @@ export const toast = {
 		message: Parameters<typeof baseToast.loading>[0],
 		opts?: Parameters<typeof baseToast.loading>[1],
 	): string | number | undefined {
-		if (!toaster) {
-			const id = opts?.id ?? generateToastId();
-			pendingQueue.push(() => baseToast.loading(message, { ...opts, id }));
-			return id;
-		}
 		return baseToast.loading(message, opts);
 	},
 	success(message: Parameters<typeof baseToast.success>[0], opts?: Parameters<typeof baseToast.success>[1]): void {
-		if (!toaster) {
-			pendingQueue.push(() => baseToast.success(message, opts));
-			return;
-		}
 		baseToast.success(message, opts);
 	},
 	error(message: Parameters<typeof baseToast.error>[0], opts?: Parameters<typeof baseToast.error>[1]): void {
-		if (!toaster) {
-			pendingQueue.push(() => baseToast.error(message, opts));
-			return;
-		}
 		baseToast.error(message, opts);
 	},
 	warning(message: Parameters<typeof baseToast.warning>[0], opts?: Parameters<typeof baseToast.warning>[1]): void {
-		if (!toaster) {
-			pendingQueue.push(() => baseToast.warning(message, opts));
-			return;
-		}
 		baseToast.warning(message, opts);
 	},
 	info(message: Parameters<typeof baseToast.info>[0], opts?: Parameters<typeof baseToast.info>[1]): void {
-		if (!toaster) {
-			pendingQueue.push(() => baseToast.info(message, opts));
-			return;
-		}
 		baseToast.info(message, opts);
 	},
 	dismiss(id?: Parameters<typeof baseToast.dismiss>[0]): void {
-		if (!toaster) {
-			pendingQueue.push(() => baseToast.dismiss(id));
-			return;
-		}
 		baseToast.dismiss(id);
 	},
 };

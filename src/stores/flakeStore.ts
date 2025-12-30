@@ -39,6 +39,57 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 
 	let isCheckingUpdates = false;
 
+	function getErrorToast(errorMsg: string): { id: string; message: string } {
+		const normalized = errorMsg.toLowerCase();
+
+		if (normalized.includes("rate limit")) {
+			return {
+				id: "error:rate-limit",
+				message: "GitHub rate limit exceeded; set GITHUB_TOKEN",
+			};
+		}
+
+		if (normalized.includes("bad credentials") || normalized.includes("requires authentication")) {
+			return {
+				id: "error:auth",
+				message: "GitHub authentication failed - check GITHUB_TOKEN",
+			};
+		}
+
+		if (normalized.includes("404") || normalized.includes("not found")) {
+			return {
+				id: "error:not-found",
+				message: "GitHub repository not found",
+			};
+		}
+
+		if (normalized.includes("fetch failed") || normalized.includes("enotfound") || normalized.includes("network")) {
+			return {
+				id: "error:network",
+				message: "Network error checking GitHub",
+			};
+		}
+
+		if (normalized.includes("missing owner or repo")) {
+			return {
+				id: "error:missing-owner-repo",
+				message: "Invalid GitHub input (missing owner/repo)",
+			};
+		}
+
+		if (normalized.includes("github api error")) {
+			return {
+				id: "error:github-api",
+				message: "GitHub API error checking updates",
+			};
+		}
+
+		return {
+			id: "error:unknown",
+			message: "Error checking updates",
+		};
+	}
+
 	async function checkUpdates(inputsList?: FlakeInput[]) {
 		if (isCheckingUpdates) return;
 		isCheckingUpdates = true;
@@ -46,15 +97,27 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		const toCheck = inputsList || state.inputs;
 
 		try {
+			const errorsByType = new Set<string>();
 			await githubService.checkForUpdates(toCheck, (name, status) => {
 				setState("updateStatuses", name, status);
+				if (status.error) {
+					errorsByType.add(status.error);
+				}
 			});
+
+			const toastsById = new Map<string, string>();
+			for (const error of errorsByType) {
+				const toastMeta = getErrorToast(error);
+				toastsById.set(toastMeta.id, toastMeta.message);
+			}
+
+			for (const [id, message] of toastsById) {
+				toast.error(message, { id });
+			}
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
-			const msg = errorMsg.includes("rate limit")
-				? `${errorMsg} - set GITHUB_TOKEN env var`
-				: `Error checking updates: ${errorMsg}`;
-			toast.error(msg);
+			const toastMeta = getErrorToast(errorMsg);
+			toast.error(toastMeta.message, { id: toastMeta.id });
 		} finally {
 			isCheckingUpdates = false;
 		}

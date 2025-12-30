@@ -3,7 +3,7 @@ import { createResource, Match, onMount, Show, Switch } from "solid-js";
 import type { FlakeData } from "./services/flake";
 import { flakeService } from "./services/flake";
 import { processManager } from "./services/processManager";
-import { initToaster } from "./services/toast";
+import { mountToaster } from "./services/toast";
 import { createFlakeStore } from "./stores/flakeStore";
 import { theme } from "./theme";
 import type { FlakeInput } from "./types";
@@ -57,7 +57,7 @@ export function App(props: AppProps) {
 	const renderer = useRenderer();
 
 	onMount(() => {
-		initToaster(renderer);
+		mountToaster(renderer);
 	});
 
 	const [flakeData] = createResource(

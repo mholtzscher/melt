@@ -8,6 +8,7 @@ export function mountToaster(renderer: CliRenderer): void {
 	if (toaster) return;
 
 	toaster = new ToasterRenderable(renderer, {
+		offset: { bottom: 4 },
 		toastOptions: {
 			style: {
 				backgroundColor: theme.bg,

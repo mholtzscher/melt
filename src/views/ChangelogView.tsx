@@ -127,36 +127,25 @@ export function ChangelogView(props: ChangelogViewProps) {
 
 	return (
 		<box flexDirection="column" flexGrow={1}>
-			<box
-				flexDirection="row"
-				paddingLeft={1}
-				paddingRight={1}
-				flexShrink={0}
-				borderStyle="rounded"
-				borderColor={theme.border}
-			>
-				<text fg={theme.accent} attributes={1}>
-					Changelog: {props.input.name}
-				</text>
-				<text fg={theme.textDim}> ({props.input.url})</text>
-			</box>
-
-			<Show when={loading()}>
-				<box paddingLeft={1} flexGrow={1}>
-					<text fg={theme.warning}>Loading commits...</text>
-				</box>
-			</Show>
-
-			<Show when={!loading()}>
-				<Show
-					when={commits().length > 0}
-					fallback={
-						<box paddingLeft={1} flexGrow={1}>
-							<text fg={theme.success}>Already up to date!</text>
+			<box flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border} title={`${props.input.name} (${props.input.url})`}>
+				<Show when={loading()}>
+					<box flexDirection="column" flexGrow={1} justifyContent="center" alignItems="center">
+						<box flexDirection="row">
+							<spinner name="dots" color={theme.accent} />
+							<text fg={theme.text}> Loading commits...</text>
 						</box>
-					}
-				>
-					<box flexGrow={1} flexShrink={1} borderStyle="rounded" borderColor={theme.border}>
+					</box>
+				</Show>
+
+				<Show when={!loading()}>
+					<Show
+						when={commits().length > 0}
+						fallback={
+							<box paddingLeft={1} flexGrow={1}>
+								<text fg={theme.success}>Already up to date!</text>
+							</box>
+						}
+					>
 						<scrollbox ref={scrollBoxRef} flexGrow={1} paddingLeft={1} paddingRight={1} overflow="hidden">
 							<box flexDirection="column">
 								<For each={commits()}>
@@ -198,16 +187,18 @@ export function ChangelogView(props: ChangelogViewProps) {
 								</For>
 							</box>
 						</scrollbox>
-					</box>
+					</Show>
 				</Show>
-			</Show>
+			</box>
 
 			<HelpBar shortcuts={shortcuts.changelog}>
-				<box flexDirection="row" marginLeft={2}>
-					<text fg={theme.success}>+{lockedIndex()} new</text>
-					<text fg={theme.warning}> {"\u{1F512}"} </text>
-					<text fg={theme.textMuted}>{commits().length - lockedIndex() - 1} older</text>
-				</box>
+				<Show when={!loading() && commits().length > 0}>
+					<box flexDirection="row" marginLeft={2}>
+						<text fg={theme.success}>+{lockedIndex()} new</text>
+						<text fg={theme.warning}> {"\u{1F512}"} </text>
+						<text fg={theme.textMuted}>{commits().length - lockedIndex() - 1} older</text>
+					</box>
+				</Show>
 			</HelpBar>
 
 			<ConfirmDialog visible={showConfirm} inputName={() => props.input.name} commit={confirmCommit} />

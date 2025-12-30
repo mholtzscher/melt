@@ -154,7 +154,6 @@ async function getCommitsFromRev(
 async function checkForUpdate(input: FlakeInput): Promise<UpdateStatus> {
 	if (!input.owner || !input.repo) {
 		return {
-			hasUpdate: false,
 			commitsBehind: 0,
 			loading: false,
 			error: "Missing owner or repo",
@@ -164,13 +163,11 @@ async function checkForUpdate(input: FlakeInput): Promise<UpdateStatus> {
 	try {
 		const commits = await githubService.getCommitsSinceRev(input.owner, input.repo, input.rev, input.ref);
 		return {
-			hasUpdate: commits.length > 0,
 			commitsBehind: commits.length,
 			loading: false,
 		};
 	} catch (error) {
 		return {
-			hasUpdate: false,
 			commitsBehind: 0,
 			loading: false,
 			error: error instanceof Error ? error.message : String(error),
@@ -295,7 +292,6 @@ export const githubService: GitHubService = {
 
 		for (const input of githubInputs) {
 			const loadingStatus: UpdateStatus = {
-				hasUpdate: false,
 				commitsBehind: 0,
 				loading: true,
 			};

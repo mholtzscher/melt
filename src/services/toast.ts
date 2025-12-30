@@ -62,7 +62,10 @@ export function toastForError(errorMsg: string): ToastMeta {
 
 	const patterns: Array<[RegExp, ToastMeta]> = [
 		[/rate limit/, { id: "error:rate-limit", message: "GitHub rate limit exceeded; set GITHUB_TOKEN" }],
-		[/bad credentials|requires authentication/, { id: "error:auth", message: "GitHub authentication failed - check GITHUB_TOKEN" }],
+		[
+			/bad credentials|requires authentication/,
+			{ id: "error:auth", message: "GitHub authentication failed - check GITHUB_TOKEN" },
+		],
 		[/404|not found/, { id: "error:not-found", message: "GitHub repository not found" }],
 		[/fetch failed|enotfound|network/, { id: "error:network", message: "Network error checking GitHub" }],
 		[/missing owner or repo/, { id: "error:missing-owner-repo", message: "Invalid GitHub input (missing owner/repo)" }],

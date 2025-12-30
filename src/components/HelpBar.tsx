@@ -26,6 +26,7 @@ export function HelpBar(props: HelpBarProps) {
 	return (
 		<box
 			flexDirection="row"
+			justifyContent="space-between"
 			paddingLeft={1}
 			paddingRight={1}
 			flexShrink={0}
@@ -37,8 +38,6 @@ export function HelpBar(props: HelpBarProps) {
 					<For each={props.shortcuts}>{(item) => <ShortcutItem key={item.key} description={item.description} />}</For>
 				</box>
 			</Show>
-
-			<box flexGrow={1} />
 
 			{props.children}
 		</box>

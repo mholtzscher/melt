@@ -60,21 +60,15 @@ export interface ToastMeta {
 export function toastForError(errorMsg: string): ToastMeta {
 	const normalized = errorMsg.toLowerCase();
 
-	const errorPatterns: Array<{ pattern: string | RegExp; result: ToastMeta }> = [
-		{ pattern: "rate limit", result: { id: "error:rate-limit", message: "GitHub rate limit exceeded; set GITHUB_TOKEN" } },
-		{ pattern: /bad credentials|requires authentication/, result: { id: "error:auth", message: "GitHub authentication failed - check GITHUB_TOKEN" } },
-		{ pattern: /404|not found/, result: { id: "error:not-found", message: "GitHub repository not found" } },
-		{ pattern: /fetch failed|enotfound|network/, result: { id: "error:network", message: "Network error checking GitHub" } },
-		{ pattern: "missing owner or repo", result: { id: "error:missing-owner-repo", message: "Invalid GitHub input (missing owner/repo)" } },
-		{ pattern: "github api error", result: { id: "error:github-api", message: "GitHub API error checking updates" } },
+	const patterns: Array<[RegExp, ToastMeta]> = [
+		[/rate limit/, { id: "error:rate-limit", message: "GitHub rate limit exceeded; set GITHUB_TOKEN" }],
+		[/bad credentials|requires authentication/, { id: "error:auth", message: "GitHub authentication failed - check GITHUB_TOKEN" }],
+		[/404|not found/, { id: "error:not-found", message: "GitHub repository not found" }],
+		[/fetch failed|enotfound|network/, { id: "error:network", message: "Network error checking GitHub" }],
+		[/missing owner or repo/, { id: "error:missing-owner-repo", message: "Invalid GitHub input (missing owner/repo)" }],
+		[/github api error/, { id: "error:github-api", message: "GitHub API error checking updates" }],
 	];
 
-	for (const { pattern, result } of errorPatterns) {
-		const matches = typeof pattern === "string" ? normalized.includes(pattern) : pattern.test(normalized);
-		if (matches) {
-			return result;
-		}
-	}
-
-	return { id: "error:unknown", message: "Error checking updates" };
+	const match = patterns.find(([regex]) => regex.test(normalized));
+	return match?.[1] ?? { id: "error:unknown", message: "Error checking updates" };
 }

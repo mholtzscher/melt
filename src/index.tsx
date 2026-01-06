@@ -1,18 +1,17 @@
-import { render } from "@opentui/solid";
-import "opentui-spinner/solid";
-import { App } from "./App";
-import { parseArgs } from "./cli";
-import { processManager } from "./services/processManager";
+import { runCli } from "./cli";
 
-process.once("SIGINT", () => {
-	processManager.cleanup();
-	process.exit(0);
+runCli(async (flakePath) => {
+	// Lazy-load TUI dependencies only when command runs (not for --help/--version)
+	const [{ render }, { App }, { shutdown }] = await Promise.all([
+		import("@opentui/solid"),
+		import("./App"),
+		import("./shutdown"),
+	]);
+	await import("opentui-spinner/solid");
+
+	process.once("SIGINT", () => void shutdown(0));
+	process.once("SIGTERM", () => void shutdown(0));
+	process.once("SIGHUP", () => void shutdown(0));
+
+	render(() => <App flakePath={flakePath} />);
 });
-
-process.once("SIGTERM", () => {
-	processManager.cleanup();
-	process.exit(0);
-});
-
-const args = await parseArgs();
-render(() => <App flakePath={args.flake} />);

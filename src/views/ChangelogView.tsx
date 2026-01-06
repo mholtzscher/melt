@@ -1,9 +1,11 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
-import { createEffect, createSignal, For, onMount, Show } from "solid-js";
+import { batch, createEffect, createResource, createSignal, For, on, Show } from "solid-js";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { HelpBar } from "../components/HelpBar";
 import { shortcuts } from "../config/shortcuts";
+import { useScrollSync } from "../hooks/useScrollSync";
+import { runEffectEither } from "../runtime";
 import { githubService } from "../services/github";
 import type { FlakeStore } from "../stores/flakeStore";
 import { theme } from "../theme";
@@ -83,40 +85,41 @@ export function ChangelogView(props: ChangelogViewProps) {
 	const { actions } = props.store;
 	let scrollBoxRef: ScrollBoxRenderable | undefined;
 
-	const [commits, setCommits] = createSignal<GitHubCommit[]>([]);
-	const [lockedIndex, setLockedIndex] = createSignal(0);
+	// Use createResource for async data fetching with automatic loading state
+	const [changelogData] = createResource(
+		() => props.input,
+		async (input) => {
+			const result = await runEffectEither(githubService.getChangelog(input));
+			if (result._tag === "Left") {
+				return { commits: [], lockedIndex: 0 };
+			}
+			return result.right;
+		},
+	);
+
+	// Derived state from resource
+	const commits = () => changelogData()?.commits ?? [];
+	const lockedIndex = () => changelogData()?.lockedIndex ?? 0;
+
+	// Local UI state
 	const [cursorIndex, setCursorIndex] = createSignal(0);
-	const [loading, setLoading] = createSignal(true);
 	const [showConfirm, setShowConfirm] = createSignal(false);
 	const [confirmCommit, setConfirmCommit] = createSignal<GitHubCommit | undefined>();
 
-	createEffect(() => {
-		const cursor = cursorIndex();
-		if (scrollBoxRef) {
-			const viewportHeight = scrollBoxRef.height ?? 10;
-			const scrollTop = scrollBoxRef.scrollTop ?? 0;
-			if (cursor >= scrollTop + viewportHeight) {
-				scrollBoxRef.scrollTop = cursor - viewportHeight + 1;
-			}
-			if (cursor < scrollTop) {
-				scrollBoxRef.scrollTop = cursor;
-			}
-		}
-	});
+	// Initialize cursor position when data loads
+	createEffect(
+		on(
+			() => changelogData(),
+			(data) => {
+				if (data) {
+					setCursorIndex(data.lockedIndex);
+				}
+			},
+		),
+	);
 
-	onMount(async () => {
-		try {
-			const result = await githubService.getChangelog(props.input);
-			setCommits(result.commits);
-			setLockedIndex(result.lockedIndex);
-			setCursorIndex(result.lockedIndex);
-		} catch (_err) {
-			setCommits([]);
-			setLockedIndex(0);
-		} finally {
-			setLoading(false);
-		}
-	});
+	// Scroll sync with explicit dependency tracking
+	useScrollSync(cursorIndex, () => scrollBoxRef);
 
 	function moveCursor(delta: number) {
 		const len = commits().length;
@@ -132,14 +135,18 @@ export function ChangelogView(props: ChangelogViewProps) {
 	function showConfirmDialog() {
 		const commit = commits()[cursorIndex()];
 		if (commit) {
-			setConfirmCommit(commit);
-			setShowConfirm(true);
+			batch(() => {
+				setConfirmCommit(commit);
+				setShowConfirm(true);
+			});
 		}
 	}
 
 	function hideConfirmDialog() {
-		setShowConfirm(false);
-		setConfirmCommit(undefined);
+		batch(() => {
+			setShowConfirm(false);
+			setConfirmCommit(undefined);
+		});
 	}
 
 	async function handleConfirm() {
@@ -199,11 +206,11 @@ export function ChangelogView(props: ChangelogViewProps) {
 				borderColor={theme.border}
 				title={`${props.input.name} (${props.input.url})`}
 			>
-				<Show when={loading()}>
+				<Show when={changelogData.loading}>
 					<ChangelogLoading />
 				</Show>
 
-				<Show when={!loading()}>
+				<Show when={!changelogData.loading}>
 					<Show
 						when={commits().length > 0}
 						fallback={
@@ -230,12 +237,12 @@ export function ChangelogView(props: ChangelogViewProps) {
 			</box>
 
 			<HelpBar shortcuts={shortcuts.changelog}>
-				<Show when={!loading() && commits().length > 0}>
+				<Show when={!changelogData.loading && commits().length > 0}>
 					<CommitStats lockedIndex={lockedIndex()} totalCommits={commits().length} />
 				</Show>
 			</HelpBar>
 
-			<ConfirmDialog visible={showConfirm} inputName={() => props.input.name} commit={confirmCommit} />
+			<ConfirmDialog visible={showConfirm()} inputName={props.input.name} commit={confirmCommit()} />
 		</box>
 	);
 }

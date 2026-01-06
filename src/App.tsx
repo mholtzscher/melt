@@ -1,9 +1,10 @@
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import { createResource, Match, onMount, Show, Switch } from "solid-js";
+import { runEffect } from "./runtime";
 import type { FlakeData } from "./services/flake";
 import { flakeService } from "./services/flake";
-import { processManager } from "./services/processManager";
 import { mountToaster } from "./services/toast";
+import { setRenderer, shutdown } from "./shutdown";
 import { createFlakeStore } from "./stores/flakeStore";
 import { theme } from "./theme";
 import type { FlakeInput } from "./types";
@@ -57,24 +58,20 @@ export function App(props: AppProps) {
 	const renderer = useRenderer();
 
 	onMount(() => {
+		setRenderer(renderer);
 		mountToaster(renderer);
 	});
 
 	const [flakeData] = createResource(
 		() => props.flakePath ?? ".",
 		async (flakePath) => {
-			const result = await flakeService.load(flakePath);
-			if (!result.ok) {
-				throw new Error(result.error);
-			}
-			return result.data;
+			return runEffect(flakeService.load(flakePath));
 		},
 	);
 
 	function quit(code = 0) {
-		processManager.cleanup();
 		renderer.destroy();
-		process.exit(code);
+		void shutdown(code);
 	}
 
 	return (

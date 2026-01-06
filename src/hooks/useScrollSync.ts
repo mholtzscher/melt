@@ -1,14 +1,11 @@
-import { createEffect, on, type Accessor } from "solid-js";
+import { type Accessor, createEffect, on } from "solid-js";
 
 interface ScrollBoxLike {
 	height?: number;
 	scrollTop?: number;
 }
 
-export function useScrollSync(
-	cursorIndex: Accessor<number>,
-	getScrollBox: () => ScrollBoxLike | undefined,
-): void {
+export function useScrollSync(cursorIndex: Accessor<number>, getScrollBox: () => ScrollBoxLike | undefined): void {
 	createEffect(
 		on(cursorIndex, (cursor) => {
 			const scrollBox = getScrollBox();

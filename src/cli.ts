@@ -1,5 +1,5 @@
 import { Args, Command } from "@effect/cli";
-import { BunContext, BunRuntime } from "@effect/platform-bun";
+import { BunContext } from "@effect/platform-bun";
 import { Deferred, Effect, Option } from "effect";
 
 export interface CliArgs {
@@ -29,15 +29,16 @@ export function signalShutdown(): void {
  * Run the CLI program. The handler receives parsed args and a shutdown signal.
  * The program stays alive until signalShutdown() is called.
  */
-export function runCli(handler: (flakePath: string | undefined) => void): void {
+export function runCli(handler: (flakePath: string | undefined) => void | Promise<void>): void {
 	const program = Effect.gen(function* () {
-		const deferred = yield* Deferred.make<void, never>();
-		shutdownDeferred = deferred;
-
 		const command = Command.make("melt", { flake: flakeArg }, (args) =>
 			Effect.gen(function* () {
+				// Create deferred inside command handler so --help doesn't trigger it
+				const deferred = yield* Deferred.make<void, never>();
+				shutdownDeferred = deferred;
+
 				const flakePath = Option.getOrUndefined(args.flake);
-				handler(flakePath);
+				yield* Effect.promise(() => Promise.resolve(handler(flakePath)));
 
 				// Keep the Effect alive until shutdown is signaled
 				yield* Deferred.await(deferred);
@@ -52,5 +53,11 @@ export function runCli(handler: (flakePath: string | undefined) => void): void {
 		yield* cli(process.argv);
 	}).pipe(Effect.provide(BunContext.layer));
 
-	BunRuntime.runMain(program);
+	Effect.runPromise(program).then(
+		() => process.exit(0),
+		(err) => {
+			console.error(err);
+			process.exit(1);
+		},
+	);
 }

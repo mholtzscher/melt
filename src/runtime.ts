@@ -1,16 +1,24 @@
 import { Effect, Exit, FiberSet, Scope } from "effect";
 
-// A global scope for the lifetime of the app. Any fibers added to the FiberSet
-// will be interrupted when this scope is closed.
-const scope = Effect.runSync(Scope.make());
-
-// FiberSet requires a Scope; extend it into our global scope.
-const fiberSet = Effect.runSync(Scope.extend(FiberSet.make(), scope));
-
-// A run function that forks effects into the FiberSet and returns a Promise.
-const runPromise = Effect.runSync(FiberSet.runtimePromise(fiberSet)());
-
+// Lazy-initialized runtime to avoid keeping the process alive for --help/--version
+let runtime:
+	| {
+			scope: Scope.CloseableScope;
+			fiberSet: FiberSet.FiberSet<unknown, unknown>;
+			runPromise: <A, E>(effect: Effect.Effect<A, E>) => Promise<A>;
+	  }
+	| undefined;
 let isClosed = false;
+
+function ensureInitialized() {
+	if (!runtime) {
+		const scope = Effect.runSync(Scope.make());
+		const fiberSet = Effect.runSync(Scope.extend(FiberSet.make(), scope));
+		const runPromise = Effect.runSync(FiberSet.runtimePromise(fiberSet)());
+		runtime = { scope, fiberSet, runPromise };
+	}
+	return runtime;
+}
 
 /**
  * Check if the runtime has been closed.
@@ -26,6 +34,7 @@ export function runEffect<A, E>(effect: Effect.Effect<A, E>): Promise<A> {
 	if (isClosed) {
 		return Promise.reject(new Error("Runtime is closed"));
 	}
+	const { runPromise } = ensureInitialized();
 	return runPromise(effect);
 }
 
@@ -44,5 +53,9 @@ export function runEffectEither<A, E>(
 export async function interruptAll(): Promise<void> {
 	if (isClosed) return;
 	isClosed = true;
-	await Effect.runPromise(FiberSet.clear(fiberSet).pipe(Effect.andThen(Scope.close(scope, Exit.void))));
+	if (runtime) {
+		await Effect.runPromise(
+			FiberSet.clear(runtime.fiberSet).pipe(Effect.andThen(Scope.close(runtime.scope, Exit.void))),
+		);
+	}
 }

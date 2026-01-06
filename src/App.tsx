@@ -5,6 +5,7 @@ import type { FlakeData } from "./services/flake";
 import { flakeService } from "./services/flake";
 import { mountToaster } from "./services/toast";
 import { createFlakeStore } from "./stores/flakeStore";
+import { setRenderer, shutdown } from "./shutdown";
 import { theme } from "./theme";
 import type { FlakeInput } from "./types";
 import { ChangelogView } from "./views/ChangelogView";
@@ -57,6 +58,7 @@ export function App(props: AppProps) {
 	const renderer = useRenderer();
 
 	onMount(() => {
+		setRenderer(renderer);
 		mountToaster(renderer);
 	});
 
@@ -69,7 +71,7 @@ export function App(props: AppProps) {
 
 	function quit(code = 0) {
 		renderer.destroy();
-		process.exit(code);
+		void shutdown(code);
 	}
 
 	return (

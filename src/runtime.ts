@@ -1,42 +1,36 @@
-import { Effect, Fiber, MutableRef } from "effect";
+import { Effect, Exit, FiberSet, Scope } from "effect";
 
-// Track all running fibers for cleanup on process exit
-const runningFibers = MutableRef.make<Set<Fiber.RuntimeFiber<unknown, unknown>>>(new Set());
+// A global scope for the lifetime of the app. Any fibers added to the FiberSet
+// will be interrupted when this scope is closed.
+const scope = Effect.runSync(Scope.make());
+
+// FiberSet requires a Scope; extend it into our global scope.
+const fiberSet = Effect.runSync(Scope.extend(FiberSet.make(), scope));
+
+// A run function that forks effects into the FiberSet and returns a Promise.
+const runPromise = Effect.runSync(FiberSet.runtimePromise(fiberSet)());
+
+let isClosed = false;
 
 /**
- * Run an Effect and track it for cleanup on process exit
+ * Check if the runtime has been closed.
  */
-export function runEffect<A, E>(effect: Effect.Effect<A, E>): Promise<A> {
-	return new Promise((resolve, reject) => {
-		const fiber = Effect.runFork(effect);
-
-		// Track the fiber
-		MutableRef.update(runningFibers, (set) => {
-			set.add(fiber);
-			return set;
-		});
-
-		// Wait for completion and cleanup
-		Effect.runPromise(Fiber.join(fiber))
-			.then((result) => {
-				MutableRef.update(runningFibers, (set) => {
-					set.delete(fiber);
-					return set;
-				});
-				resolve(result);
-			})
-			.catch((error) => {
-				MutableRef.update(runningFibers, (set) => {
-					set.delete(fiber);
-					return set;
-				});
-				reject(error);
-			});
-	});
+export function isRuntimeClosed(): boolean {
+	return isClosed;
 }
 
 /**
- * Run an Effect with Either for error handling, tracked for cleanup
+ * Run an Effect and track it for cleanup on shutdown.
+ */
+export function runEffect<A, E>(effect: Effect.Effect<A, E>): Promise<A> {
+	if (isClosed) {
+		return Promise.reject(new Error("Runtime is closed"));
+	}
+	return runPromise(effect);
+}
+
+/**
+ * Run an Effect with Either for error handling, tracked for cleanup.
  */
 export function runEffectEither<A, E>(
 	effect: Effect.Effect<A, E>,
@@ -45,18 +39,10 @@ export function runEffectEither<A, E>(
 }
 
 /**
- * Interrupt all running fibers - call this on SIGINT/SIGTERM
+ * Interrupt all running fibers and close the global scope.
  */
 export async function interruptAll(): Promise<void> {
-	const fibers = MutableRef.get(runningFibers);
-	if (fibers.size === 0) return;
-
-	const interrupts = Array.from(fibers).map((fiber) =>
-		Effect.runPromise(Fiber.interrupt(fiber)).catch(() => {
-			// Ignore errors during interruption
-		}),
-	);
-
-	await Promise.all(interrupts);
-	MutableRef.set(runningFibers, new Set());
+	if (isClosed) return;
+	isClosed = true;
+	await Effect.runPromise(FiberSet.clear(fiberSet).pipe(Effect.andThen(Scope.close(scope, Exit.void))));
 }

@@ -1,12 +1,12 @@
 import type { Accessor } from "solid-js";
 import { Show } from "solid-js";
 import { theme } from "../theme";
-import type { GitHubCommit } from "../types";
+import type { Commit } from "../types";
 
 export interface ConfirmDialogProps {
 	visible: Accessor<boolean>;
 	inputName: Accessor<string>;
-	commit: Accessor<GitHubCommit | undefined>;
+	commit: Accessor<Commit | undefined>;
 }
 
 export function ConfirmDialog(props: ConfirmDialogProps) {

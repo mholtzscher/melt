@@ -2,8 +2,8 @@ import { batch } from "solid-js";
 import { createStore } from "solid-js/store";
 import type { FlakeData } from "../services/flake";
 import { flakeService } from "../services/flake";
-import { githubService } from "../services/github";
 import { toast, toastForError } from "../services/toast";
+import { vcsService } from "../services/vcs";
 import type { FlakeInput, UpdateStatus } from "../types";
 
 export interface FlakeState {
@@ -18,7 +18,7 @@ export interface FlakeActions {
 	refresh: () => Promise<void>;
 	updateSelected: (names: string[]) => Promise<void>;
 	updateAll: () => Promise<void>;
-	lockToCommit: (inputName: string, sha: string, owner: string, repo: string) => Promise<boolean>;
+	lockToCommit: (input: FlakeInput, sha: string) => Promise<boolean>;
 	showChangelog: (input: FlakeInput) => void;
 	closeChangelog: () => void;
 }
@@ -45,7 +45,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		const toCheck = inputsList || state.inputs;
 
 		try {
-			await githubService.checkForUpdates(toCheck, (name, status) => {
+			await vcsService.checkForUpdates(toCheck, (name, status) => {
 				setState("updateStatuses", name, status);
 				if (status.error) {
 					const toastMeta = toastForError(status.error);
@@ -137,13 +137,19 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		}
 	}
 
-	async function lockToCommit(inputName: string, sha: string, owner: string, repo: string): Promise<boolean> {
-		const toastId = toast.loading(`Locking ${inputName} to ${sha.substring(0, 7)}...`);
+	async function lockToCommit(input: FlakeInput, sha: string): Promise<boolean> {
+		const toastId = toast.loading(`Locking ${input.name} to ${sha.substring(0, 7)}...`);
 
-		const result = await flakeService.lockInputToRev(state.path, inputName, sha, owner, repo);
+		const lockUrl = vcsService.getLockUrl(input, sha);
+		if (!lockUrl) {
+			toast.error(`Cannot lock ${input.type} inputs`, toastId);
+			return false;
+		}
+
+		const result = await flakeService.lockInputToRev(state.path, input.name, lockUrl);
 
 		if (result.ok) {
-			toast.success(`Locked ${inputName} to ${sha.substring(0, 7)}`, toastId);
+			toast.success(`Locked ${input.name} to ${sha.substring(0, 7)}`, toastId);
 			return true;
 		}
 		toast.error(result.error, toastId);
@@ -151,8 +157,8 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 	}
 
 	function showChangelog(input: FlakeInput) {
-		if (input.type !== "github") {
-			toast.warning("Changelog only available for GitHub inputs");
+		if (!vcsService.supportsChangelog(input)) {
+			toast.warning(`Changelog not available for ${input.type} inputs`);
 			return;
 		}
 		setState("changelogInput", input);

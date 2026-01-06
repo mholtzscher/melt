@@ -4,10 +4,11 @@ import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { HelpBar } from "../components/HelpBar";
 import { shortcuts } from "../config/shortcuts";
-import { githubService } from "../services/github";
+import { toast } from "../services/toast";
+import { vcsService } from "../services/vcs";
 import type { FlakeStore } from "../stores/flakeStore";
 import { theme } from "../theme";
-import type { FlakeInput, GitHubCommit } from "../types";
+import type { Commit, FlakeInput } from "../types";
 
 export interface ChangelogViewProps {
 	store: FlakeStore;
@@ -15,7 +16,7 @@ export interface ChangelogViewProps {
 }
 
 interface CommitRowProps {
-	commit: GitHubCommit;
+	commit: Commit;
 	isCursor: boolean;
 	isLocked: boolean;
 }
@@ -59,6 +60,15 @@ interface CommitStatsProps {
 }
 
 function CommitStats(props: CommitStatsProps) {
+	// lockedIndex = -1 means locked rev wasn't found
+	if (props.lockedIndex < 0) {
+		return (
+			<box flexDirection="row" marginLeft={2}>
+				<text fg={theme.textMuted}>{props.totalCommits} commits (locked rev not found)</text>
+			</box>
+		);
+	}
+
 	return (
 		<box flexDirection="row" marginLeft={2}>
 			<text fg={theme.success}>+{props.lockedIndex} new</text>
@@ -83,12 +93,12 @@ export function ChangelogView(props: ChangelogViewProps) {
 	const { actions } = props.store;
 	let scrollBoxRef: ScrollBoxRenderable | undefined;
 
-	const [commits, setCommits] = createSignal<GitHubCommit[]>([]);
+	const [commits, setCommits] = createSignal<Commit[]>([]);
 	const [lockedIndex, setLockedIndex] = createSignal(0);
 	const [cursorIndex, setCursorIndex] = createSignal(0);
 	const [loading, setLoading] = createSignal(true);
 	const [showConfirm, setShowConfirm] = createSignal(false);
-	const [confirmCommit, setConfirmCommit] = createSignal<GitHubCommit | undefined>();
+	const [confirmCommit, setConfirmCommit] = createSignal<Commit | undefined>();
 
 	createEffect(() => {
 		const cursor = cursorIndex();
@@ -106,13 +116,17 @@ export function ChangelogView(props: ChangelogViewProps) {
 
 	onMount(async () => {
 		try {
-			const result = await githubService.getChangelog(props.input);
+			const result = await vcsService.getChangelog(props.input);
 			setCommits(result.commits);
 			setLockedIndex(result.lockedIndex);
-			setCursorIndex(result.lockedIndex);
-		} catch (_err) {
+			setCursorIndex(Math.max(0, result.lockedIndex));
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			if (!msg.includes("aborted")) {
+				toast.error(`Failed to load changelog: ${msg}`);
+			}
 			setCommits([]);
-			setLockedIndex(0);
+			setLockedIndex(-1);
 		} finally {
 			setLoading(false);
 		}
@@ -144,10 +158,9 @@ export function ChangelogView(props: ChangelogViewProps) {
 
 	async function handleConfirm() {
 		const commit = confirmCommit();
-		const { owner, repo } = props.input;
-		if (!commit || !owner || !repo) return;
+		if (!commit) return;
 		hideConfirmDialog();
-		const success = await actions.lockToCommit(props.input.name, commit.sha, owner, repo);
+		const success = await actions.lockToCommit(props.input, commit.sha);
 		if (success) {
 			actions.closeChangelog();
 			actions.refresh();

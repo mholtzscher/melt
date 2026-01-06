@@ -112,16 +112,10 @@ function TableHeader() {
 
 function getTypeBadgeColor(type: FlakeInput["type"]): string {
 	switch (type) {
-		case "github":
-			return theme.github;
-		case "gitlab":
-			return theme.gitlab;
-		case "sourcehut":
-			return theme.sourcehut;
-		case "path":
-			return theme.path;
 		case "git":
 			return theme.git;
+		case "path":
+			return theme.path;
 		default:
 			return theme.other;
 	}

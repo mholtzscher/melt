@@ -61,11 +61,8 @@ export const theme = {
 	cursor: catppuccin_mocha.rosewater,
 
 	// Type badges
-	github: catppuccin_mocha.peach,
-	gitlab: catppuccin_mocha.flamingo,
-	sourcehut: catppuccin_mocha.teal,
+	git: catppuccin_mocha.peach,
 	path: catppuccin_mocha.sky,
-	git: catppuccin_mocha.pink,
 	other: catppuccin_mocha.overlay1,
 
 	// Misc

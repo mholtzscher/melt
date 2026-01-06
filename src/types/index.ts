@@ -1,8 +1,8 @@
 // Generic result type for operations that can fail
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
-// Flake input types
-export type FlakeInputType = "github" | "gitlab" | "sourcehut" | "path" | "git" | "other";
+// Flake input types (simplified - all remote repos are "git")
+export type FlakeInputType = "git" | "path" | "other";
 
 export interface FlakeInput {
 	name: string;
@@ -48,20 +48,5 @@ export interface NixFlakeMetadataResponse {
 	};
 }
 
-// GitHub types for changelog
-export interface GitHubCommit {
-	sha: string;
-	shortSha: string;
-	message: string;
-	author: string;
-	date: string;
-	url: string;
-	isLocked?: boolean;
-}
-
-// Update status for flake inputs
-export interface UpdateStatus {
-	commitsBehind: number;
-	loading: boolean;
-	error?: string;
-}
+// Re-export VCS types
+export type { Commit, UpdateStatus } from "../services/vcs/types";

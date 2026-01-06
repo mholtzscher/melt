@@ -7,7 +7,7 @@ export interface FlakeService {
 	refresh(path: string): Promise<Result<FlakeData>>;
 	updateInputs(path: string, inputNames: string[]): Promise<Result<string>>;
 	updateAll(path: string): Promise<Result<string>>;
-	lockInputToRev(path: string, inputName: string, rev: string, owner: string, repo: string): Promise<Result<string>>;
+	lockInputToRev(path: string, inputName: string, overrideUrl: string): Promise<Result<string>>;
 }
 
 export interface FlakeData {
@@ -33,15 +33,12 @@ function getInputType(locked?: { type: string }, original?: { type: string }): F
 
 	switch (type) {
 		case "github":
-			return "github";
 		case "gitlab":
-			return "gitlab";
 		case "sourcehut":
-			return "sourcehut";
-		case "path":
-			return "path";
 		case "git":
 			return "git";
+		case "path":
+			return "path";
 		default:
 			return "other";
 	}
@@ -226,14 +223,7 @@ export const flakeService: FlakeService = {
 		return runNixCommand(["flake", "update", "--flake", path]);
 	},
 
-	async lockInputToRev(
-		path: string,
-		inputName: string,
-		rev: string,
-		owner: string,
-		repo: string,
-	): Promise<Result<string>> {
-		const overrideUrl = `github:${owner}/${repo}/${rev}`;
+	async lockInputToRev(path: string, inputName: string, overrideUrl: string): Promise<Result<string>> {
 		return runNixCommand(["flake", "update", inputName, "--override-input", inputName, overrideUrl, "--flake", path]);
 	},
 };

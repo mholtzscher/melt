@@ -61,15 +61,10 @@ export function toastForError(errorMsg: string): ToastMeta {
 	const normalized = errorMsg.toLowerCase();
 
 	const patterns: Array<[RegExp, ToastMeta]> = [
-		[/rate limit/, { id: "error:rate-limit", message: "GitHub rate limit exceeded; set GITHUB_TOKEN" }],
-		[
-			/bad credentials|requires authentication/,
-			{ id: "error:auth", message: "GitHub authentication failed - check GITHUB_TOKEN" },
-		],
-		[/404|not found/, { id: "error:not-found", message: "GitHub repository not found" }],
-		[/fetch failed|enotfound|network/, { id: "error:network", message: "Network error checking GitHub" }],
-		[/missing owner or repo/, { id: "error:missing-owner-repo", message: "Invalid GitHub input (missing owner/repo)" }],
-		[/github api error/, { id: "error:github-api", message: "GitHub API error checking updates" }],
+		[/clone|fetch failed|could not read/, { id: "error:clone", message: "Failed to fetch repository" }],
+		[/not found|does not exist/, { id: "error:not-found", message: "Repository not found" }],
+		[/network|enotfound|connection/, { id: "error:network", message: "Network error" }],
+		[/permission|authentication|credentials/, { id: "error:auth", message: "Authentication failed" }],
 	];
 
 	const match = patterns.find(([regex]) => regex.test(normalized));

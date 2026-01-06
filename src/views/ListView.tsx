@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
 import { HelpBar } from "../components/HelpBar";
 import { shortcuts } from "../config/shortcuts";
 import { useScrollSync } from "../hooks/useScrollSync";
@@ -29,20 +29,20 @@ interface StatusCellProps {
 
 function StatusCell(props: StatusCellProps) {
 	return (
-		<switch fallback={<text fg={theme.textDim}>ok</text>}>
-			<match when={!props.status}>
+		<Switch fallback={<text fg={theme.textDim}>ok</text>}>
+			<Match when={!props.status}>
 				<text fg={theme.textDim}>-</text>
-			</match>
-			<match when={props.status?.loading}>
+			</Match>
+			<Match when={props.status?.loading}>
 				<spinner name="dots" color={theme.textDim} />
-			</match>
-			<match when={props.status?.error}>
+			</Match>
+			<Match when={props.status?.error}>
 				<text fg={theme.warning}>?</text>
-			</match>
-			<match when={props.status?.commitsBehind}>
+			</Match>
+			<Match when={props.status?.commitsBehind}>
 				<text fg={theme.success}>+{props.status?.commitsBehind}</text>
-			</match>
-		</switch>
+			</Match>
+		</Switch>
 	);
 }
 

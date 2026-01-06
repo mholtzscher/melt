@@ -1,3 +1,4 @@
+import { signalShutdown } from "./cli";
 import { interruptAll } from "./runtime";
 
 let isShuttingDown = false;
@@ -23,6 +24,9 @@ export async function shutdown(code = 0): Promise<void> {
 	// Give fibers a chance to clean up, but don't wait forever
 	const timeout = new Promise<void>((resolve) => setTimeout(resolve, 1000));
 	await Promise.race([interruptAll(), timeout]);
+
+	// Signal the CLI Effect that we're done
+	signalShutdown();
 
 	process.exit(code);
 }

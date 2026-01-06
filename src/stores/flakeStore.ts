@@ -1,5 +1,6 @@
 import { batch } from "solid-js";
 import { createStore } from "solid-js/store";
+import { runEffect, runEffectEither } from "../runtime";
 import type { FlakeData } from "../services/flake";
 import { flakeService } from "../services/flake";
 import { githubService } from "../services/github";
@@ -45,13 +46,15 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		const toCheck = inputsList || state.inputs;
 
 		try {
-			await githubService.checkForUpdates(toCheck, (name, status) => {
-				setState("updateStatuses", name, status);
-				if (status.error) {
-					const toastMeta = toastForError(status.error);
-					toast.error(toastMeta.message, toastMeta.id);
-				}
-			});
+			await runEffect(
+				githubService.checkForUpdates(toCheck, (name, status) => {
+					setState("updateStatuses", name, status);
+					if (status.error) {
+						const toastMeta = toastForError(status.error);
+						toast.error(toastMeta.message, toastMeta.id);
+					}
+				}),
+			);
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
 			const toastMeta = toastForError(errorMsg);
@@ -62,14 +65,15 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 	}
 
 	async function refresh() {
-		const result = await flakeService.refresh(state.path);
-		if (!result.ok) {
-			toast.error(result.error);
+		const result = await runEffectEither(flakeService.refresh(state.path));
+
+		if (result._tag === "Left") {
+			toast.error(result.left.message);
 			return;
 		}
 
-		setState("inputs", result.data.inputs);
-		await checkUpdates(result.data.inputs);
+		setState("inputs", result.right.inputs);
+		await checkUpdates(result.right.inputs);
 	}
 
 	async function updateSelected(names: string[]) {
@@ -88,7 +92,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			}
 		});
 
-		const result = await flakeService.updateInputs(state.path, names);
+		const result = await runEffectEither(flakeService.updateInputs(state.path, names));
 
 		batch(() => {
 			for (const name of names) {
@@ -100,10 +104,10 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			}
 		});
 
-		if (result.ok) {
+		if (result._tag === "Right") {
 			await refresh();
 		} else {
-			toast.error(result.error);
+			toast.error(result.left.message);
 		}
 	}
 
@@ -118,7 +122,7 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			}
 		});
 
-		const result = await flakeService.updateAll(state.path);
+		const result = await runEffectEither(flakeService.updateAll(state.path));
 
 		batch(() => {
 			for (const input of state.inputs) {
@@ -130,23 +134,23 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 			}
 		});
 
-		if (result.ok) {
+		if (result._tag === "Right") {
 			await refresh();
 		} else {
-			toast.error(result.error);
+			toast.error(result.left.message);
 		}
 	}
 
 	async function lockToCommit(inputName: string, sha: string, owner: string, repo: string): Promise<boolean> {
 		const toastId = toast.loading(`Locking ${inputName} to ${sha.substring(0, 7)}...`);
 
-		const result = await flakeService.lockInputToRev(state.path, inputName, sha, owner, repo);
+		const result = await runEffectEither(flakeService.lockInputToRev(state.path, inputName, sha, owner, repo));
 
-		if (result.ok) {
+		if (result._tag === "Right") {
 			toast.success(`Locked ${inputName} to ${sha.substring(0, 7)}`, toastId);
 			return true;
 		}
-		toast.error(result.error, toastId);
+		toast.error(result.left.message, toastId);
 		return false;
 	}
 

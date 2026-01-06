@@ -1,14 +1,13 @@
 import { dirname, resolve } from "node:path";
-import type { FlakeInput, FlakeInputType, NixFlakeMetadataResponse, Result } from "../types";
-import { processManager } from "./processManager";
-
-export interface FlakeService {
-	load(pathArg?: string): Promise<Result<FlakeData>>;
-	refresh(path: string): Promise<Result<FlakeData>>;
-	updateInputs(path: string, inputNames: string[]): Promise<Result<string>>;
-	updateAll(path: string): Promise<Result<string>>;
-	lockInputToRev(path: string, inputName: string, rev: string, owner: string, repo: string): Promise<Result<string>>;
-}
+import { Effect } from "effect";
+import type { FlakeInput, FlakeInputType, NixFlakeMetadataResponse } from "../types";
+import {
+	CommandAbortedError,
+	FlakeMetadataError,
+	FlakeNotFoundError,
+	JsonParseError,
+	NixCommandError,
+} from "../types/errors";
 
 export interface FlakeData {
 	path: string;
@@ -24,8 +23,8 @@ function resolveFlakePath(path: string): string {
 	return resolved;
 }
 
-function hasFlakeNix(path: string = "."): Promise<boolean> {
-	return Bun.file(`${path}/flake.nix`).exists();
+function hasFlakeNix(path: string = "."): Effect.Effect<boolean> {
+	return Effect.promise(() => Bun.file(`${path}/flake.nix`).exists());
 }
 
 function getInputType(locked?: { type: string }, original?: { type: string }): FlakeInputType {
@@ -119,121 +118,132 @@ function parseInputs(data: NixFlakeMetadataResponse): FlakeInput[] {
 	return inputs;
 }
 
-async function runNixCommand(args: string[]): Promise<Result<string>> {
-	if (processManager.getSignal().aborted) {
-		return { ok: false, error: "Command aborted" };
-	}
-
-	try {
+const runNixCommand = (
+	args: string[],
+): Effect.Effect<string, NixCommandError | CommandAbortedError> =>
+	Effect.async((resume, signal) => {
 		const proc = Bun.spawn(["nix", ...args], {
-			signal: processManager.getSignal(),
+			signal,
 			stdout: "pipe",
 			stderr: "pipe",
 		});
 
-		const [stdout, stderr, exitCode] = await Promise.all([proc.stdout.text(), proc.stderr.text(), proc.exited]);
+		Promise.all([proc.stdout.text(), proc.stderr.text(), proc.exited])
+			.then(([stdout, stderr, exitCode]) => {
+				if (signal.aborted) {
+					resume(Effect.fail(new CommandAbortedError({ command: ["nix", ...args] })));
+					return;
+				}
 
-		if (processManager.getSignal().aborted) {
-			return { ok: false, error: "Command aborted" };
-		}
+				if (exitCode !== 0) {
+					resume(
+						Effect.fail(
+							new NixCommandError({
+								command: ["nix", ...args],
+								exitCode,
+								stderr,
+							}),
+						),
+					);
+					return;
+				}
 
-		if (exitCode !== 0) {
+				resume(Effect.succeed(stdout || stderr));
+			})
+			.catch((err) => {
+				if (err instanceof Error && err.name === "AbortError") {
+					resume(Effect.fail(new CommandAbortedError({ command: ["nix", ...args] })));
+				} else {
+					resume(
+						Effect.fail(
+							new NixCommandError({
+								command: ["nix", ...args],
+								exitCode: 1,
+								stderr: err instanceof Error ? err.message : String(err),
+							}),
+						),
+					);
+				}
+			});
+	});
+
+const fetchMetadata = (
+	path: string,
+): Effect.Effect<NixFlakeMetadataResponse, NixCommandError | CommandAbortedError | JsonParseError> =>
+	Effect.gen(function* () {
+		const stdout = yield* runNixCommand(["flake", "metadata", "--json", path]);
+		return yield* Effect.try({
+			try: () => JSON.parse(stdout) as NixFlakeMetadataResponse,
+			catch: (cause) => new JsonParseError({ input: stdout, cause }),
+		});
+	});
+
+export const flakeService = {
+	load: (pathArg?: string): Effect.Effect<FlakeData, FlakeNotFoundError | FlakeMetadataError> =>
+		Effect.gen(function* () {
+			const flakePath = resolveFlakePath(pathArg || process.cwd());
+
+			const hasFlake = yield* hasFlakeNix(flakePath);
+			if (!hasFlake) {
+				return yield* Effect.fail(new FlakeNotFoundError({ path: flakePath }));
+			}
+
+			const metadata = yield* fetchMetadata(flakePath).pipe(
+				Effect.mapError(
+					(e) =>
+						new FlakeMetadataError({
+							message: `Failed to load flake metadata: ${e.message}`,
+							cause: e,
+						}),
+				),
+			);
+
 			return {
-				ok: false,
-				error: stderr.trim() || `Process exited with code ${exitCode}`,
-			};
-		}
-
-		return { ok: true, data: stdout || stderr };
-	} catch (err) {
-		if (err instanceof Error && err.name === "AbortError") {
-			return { ok: false, error: "Command aborted" };
-		}
-		return {
-			ok: false,
-			error: err instanceof Error ? err.message : String(err),
-		};
-	}
-}
-
-async function fetchMetadata(path: string): Promise<Result<NixFlakeMetadataResponse>> {
-	const result = await runNixCommand(["flake", "metadata", "--json", path]);
-	if (!result.ok) {
-		return result;
-	}
-	try {
-		return { ok: true, data: JSON.parse(result.data) };
-	} catch {
-		return { ok: false, error: "Failed to parse metadata JSON" };
-	}
-}
-
-export const flakeService: FlakeService = {
-	async load(pathArg?: string): Promise<Result<FlakeData>> {
-		const flakePath = resolveFlakePath(pathArg || process.cwd());
-
-		const hasFlake = await hasFlakeNix(flakePath);
-		if (!hasFlake) {
-			return { ok: false, error: `No flake.nix found in ${flakePath}` };
-		}
-
-		const result = await fetchMetadata(flakePath);
-		if (!result.ok) {
-			return {
-				ok: false,
-				error: `Failed to load flake metadata: ${result.error}`,
-			};
-		}
-
-		return {
-			ok: true,
-			data: {
 				path: flakePath,
-				description: result.data.description,
-				inputs: parseInputs(result.data),
-			},
-		};
-	},
-
-	async refresh(path: string): Promise<Result<FlakeData>> {
-		const result = await fetchMetadata(path);
-		if (!result.ok) {
-			return {
-				ok: false,
-				error: `Failed to refresh flake metadata: ${result.error}`,
+				description: metadata.description,
+				inputs: parseInputs(metadata),
 			};
-		}
+		}),
 
-		return {
-			ok: true,
-			data: {
+	refresh: (path: string): Effect.Effect<FlakeData, FlakeMetadataError> =>
+		Effect.gen(function* () {
+			const metadata = yield* fetchMetadata(path).pipe(
+				Effect.mapError(
+					(e) =>
+						new FlakeMetadataError({
+							message: `Failed to refresh flake metadata: ${e.message}`,
+							cause: e,
+						}),
+				),
+			);
+
+			return {
 				path,
-				description: result.data.description,
-				inputs: parseInputs(result.data),
-			},
-		};
-	},
+				description: metadata.description,
+				inputs: parseInputs(metadata),
+			};
+		}),
 
-	async updateInputs(path: string, inputNames: string[]): Promise<Result<string>> {
+	updateInputs: (path: string, inputNames: string[]): Effect.Effect<string, NixCommandError | CommandAbortedError> => {
 		if (inputNames.length === 0) {
-			return { ok: true, data: "No inputs to update" };
+			return Effect.succeed("No inputs to update");
 		}
-
 		return runNixCommand(["flake", "update", ...inputNames, "--flake", path]);
 	},
 
-	async updateAll(path: string): Promise<Result<string>> {
-		return runNixCommand(["flake", "update", "--flake", path]);
-	},
+	updateAll: (path: string): Effect.Effect<string, NixCommandError | CommandAbortedError> =>
+		runNixCommand(["flake", "update", "--flake", path]),
 
-	async lockInputToRev(
+	lockInputToRev: (
 		path: string,
 		inputName: string,
 		rev: string,
 		owner: string,
 		repo: string,
-	): Promise<Result<string>> {
+	): Effect.Effect<string, NixCommandError | CommandAbortedError> => {
 		const overrideUrl = `github:${owner}/${repo}/${rev}`;
 		return runNixCommand(["flake", "update", inputName, "--override-input", inputName, overrideUrl, "--flake", path]);
 	},
 };
+
+export type FlakeService = typeof flakeService;

@@ -29,11 +29,14 @@
 	"dependencies": {
 		"@babel/core": "^7.28.5",
 		"@babel/preset-typescript": "^7.28.5",
+		"@effect/platform": "^0.94.1",
+		"@effect/platform-bun": "^0.87.0",
 		"@opentui-ui/toast": "^0.0.3",
 		"@opentui/core": "^0.1.69",
 		"@opentui/solid": "^0.1.69",
 		"babel-preset-solid": "^1.9.10",
 		"cmd-ts": "^0.14.3",
+		"effect": "^3.19.14",
 		"opentui-spinner": "^0.0.6",
 		"solid-js": "^1.9.10"
 	}

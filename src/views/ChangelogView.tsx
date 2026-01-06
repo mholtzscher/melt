@@ -4,6 +4,7 @@ import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { HelpBar } from "../components/HelpBar";
 import { shortcuts } from "../config/shortcuts";
+import { runEffectEither } from "../runtime";
 import { githubService } from "../services/github";
 import type { FlakeStore } from "../stores/flakeStore";
 import { theme } from "../theme";
@@ -105,17 +106,17 @@ export function ChangelogView(props: ChangelogViewProps) {
 	});
 
 	onMount(async () => {
-		try {
-			const result = await githubService.getChangelog(props.input);
-			setCommits(result.commits);
-			setLockedIndex(result.lockedIndex);
-			setCursorIndex(result.lockedIndex);
-		} catch (_err) {
+		const result = await runEffectEither(githubService.getChangelog(props.input));
+
+		if (result._tag === "Right") {
+			setCommits(result.right.commits);
+			setLockedIndex(result.right.lockedIndex);
+			setCursorIndex(result.right.lockedIndex);
+		} else {
 			setCommits([]);
 			setLockedIndex(0);
-		} finally {
-			setLoading(false);
 		}
+		setLoading(false);
 	});
 
 	function moveCursor(delta: number) {

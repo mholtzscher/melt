@@ -118,9 +118,7 @@ function parseInputs(data: NixFlakeMetadataResponse): FlakeInput[] {
 	return inputs;
 }
 
-const runNixCommand = (
-	args: string[],
-): Effect.Effect<string, NixCommandError | CommandAbortedError> =>
+const runNixCommand = (args: string[]): Effect.Effect<string, NixCommandError | CommandAbortedError> =>
 	Effect.async((resume, signal) => {
 		const proc = Bun.spawn(["nix", ...args], {
 			signal,

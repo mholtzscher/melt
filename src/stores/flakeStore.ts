@@ -1,4 +1,4 @@
-import { batch } from "solid-js";
+import { batch, untrack } from "solid-js";
 import { createStore } from "solid-js/store";
 import { runEffect, runEffectEither } from "../runtime";
 import type { FlakeData } from "../services/flake";
@@ -43,7 +43,8 @@ export function createFlakeStore(initialFlake: FlakeData): FlakeStore {
 		if (isCheckingUpdates) return;
 		isCheckingUpdates = true;
 
-		const toCheck = inputsList || state.inputs;
+		// Use untrack to make intent explicit that we want a one-time read
+		const toCheck = inputsList || untrack(() => state.inputs);
 
 		try {
 			await runEffect(

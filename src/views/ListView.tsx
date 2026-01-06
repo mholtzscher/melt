@@ -1,8 +1,9 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/solid";
-import { createEffect, createSignal, For, Match, Show, Switch } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import { HelpBar } from "../components/HelpBar";
 import { shortcuts } from "../config/shortcuts";
+import { useScrollSync } from "../hooks/useScrollSync";
 import { timeService } from "../services/time";
 import type { FlakeStore } from "../stores/flakeStore";
 import { theme } from "../theme";
@@ -28,20 +29,20 @@ interface StatusCellProps {
 
 function StatusCell(props: StatusCellProps) {
 	return (
-		<Switch fallback={<text fg={theme.textDim}>ok</text>}>
-			<Match when={!props.status}>
+		<switch fallback={<text fg={theme.textDim}>ok</text>}>
+			<match when={!props.status}>
 				<text fg={theme.textDim}>-</text>
-			</Match>
-			<Match when={props.status?.loading}>
+			</match>
+			<match when={props.status?.loading}>
 				<spinner name="dots" color={theme.textDim} />
-			</Match>
-			<Match when={props.status?.error}>
+			</match>
+			<match when={props.status?.error}>
 				<text fg={theme.warning}>?</text>
-			</Match>
-			<Match when={props.status?.commitsBehind}>
+			</match>
+			<match when={props.status?.commitsBehind}>
 				<text fg={theme.success}>+{props.status?.commitsBehind}</text>
-			</Match>
-		</Switch>
+			</match>
+		</switch>
 	);
 }
 
@@ -134,19 +135,17 @@ export function ListView(props: ListViewProps) {
 	const [cursorIndex, setCursorIndex] = createSignal(0);
 	const [selectedIndices, setSelectedIndices] = createSignal<Set<number>>(new Set());
 
-	createEffect(() => {
-		const cursor = cursorIndex();
-		if (scrollBoxRef) {
-			const viewportHeight = scrollBoxRef.height ?? 10;
-			const scrollTop = scrollBoxRef.scrollTop ?? 0;
-			if (cursor >= scrollTop + viewportHeight) {
-				scrollBoxRef.scrollTop = cursor - viewportHeight + 1;
-			}
-			if (cursor < scrollTop) {
-				scrollBoxRef.scrollTop = cursor;
-			}
-		}
-	});
+	// Scroll sync with explicit dependency tracking
+	useScrollSync(cursorIndex, () => scrollBoxRef);
+
+	// Memoized derived values
+	const currentInput = createMemo(() => state.inputs[cursorIndex()]);
+
+	const selectedNames = createMemo(() =>
+		Array.from(selectedIndices())
+			.map((i) => state.inputs[i]?.name)
+			.filter((n): n is string => !!n),
+	);
 
 	function moveCursor(delta: number) {
 		const len = state.inputs.length;
@@ -156,16 +155,6 @@ export function ListView(props: ListViewProps) {
 		if (next < 0) setCursorIndex(0);
 		else if (next >= len) setCursorIndex(len - 1);
 		else setCursorIndex(next);
-	}
-
-	function getCurrentInput() {
-		return state.inputs[cursorIndex()];
-	}
-
-	function getSelectedNames(): string[] {
-		return Array.from(selectedIndices())
-			.map((i) => state.inputs[i]?.name)
-			.filter((n): n is string => !!n);
 	}
 
 	function toggleSelection() {
@@ -204,7 +193,7 @@ export function ListView(props: ListViewProps) {
 				if (e.shift) {
 					actions.updateAll();
 				} else {
-					const names = getSelectedNames();
+					const names = selectedNames();
 					if (names.length > 0) {
 						actions.updateSelected(names);
 						clearSelection();
@@ -212,7 +201,7 @@ export function ListView(props: ListViewProps) {
 				}
 			},
 			c: () => {
-				const input = getCurrentInput();
+				const input = currentInput();
 				if (input) actions.showChangelog(input);
 			},
 			r: () => actions.refresh(),

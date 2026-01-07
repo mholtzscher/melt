@@ -281,6 +281,8 @@ impl App {
                     update_statuses: HashMap::new(),
                     busy: false,
                 });
+                // Clear any status message (e.g., "Refreshing...")
+                self.status_message = None;
                 // Start checking for updates in background
                 self.spawn_check_updates(inputs);
             }

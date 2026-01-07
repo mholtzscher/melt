@@ -2,104 +2,104 @@
   description = "A TUI for managing Nix flake inputs";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    systems.url = "github:nix-systems/default";
-    bun2nix = {
-      url = "github:nix-community/bun2nix?tag=2.0.6";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.systems.follows = "systems";
     };
-  };
-
-  nixConfig = {
-    extra-substituters = [
-      "https://cache.nixos.org"
-      "https://nix-community.cachix.org"
-    ];
-    extra-trusted-public-keys = [
-      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-      "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
-    ];
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs =
-    inputs:
-    let
-      eachSystem = inputs.nixpkgs.lib.genAttrs (import inputs.systems);
-
-      pkgsFor = eachSystem (
-        system:
-        import inputs.nixpkgs {
-          inherit system;
-          overlays = [ inputs.bun2nix.overlays.default ];
-        }
-      );
-    in
     {
-      packages = eachSystem (
-        system:
-        let
-          pkgs = pkgsFor.${system};
-        in
-        {
-          default = pkgs.bun2nix.mkDerivation {
-            pname = "melt";
-            version = "0.1.0";
+      self,
+      nixpkgs,
+      rust-overlay,
+      flake-utils,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        overlays = [ (import rust-overlay) ];
+        pkgs = import nixpkgs { inherit system overlays; };
 
-            src = ./.;
+        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+          extensions = [
+            "rust-src"
+            "rust-analyzer"
+          ];
+        };
 
-            bunDeps = pkgs.bun2nix.fetchBunDeps {
-              bunNix = ./bun.nix;
-            };
+        nativeBuildInputs = with pkgs; [
+          rustToolchain
+          pkg-config
+        ];
 
-            nativeBuildInputs = with pkgs; [
-              makeWrapper
-              bun
-            ];
-
-            env.MELT_VERSION = "0.1.0";
-
-            buildPhase = ''
-              runHook preBuild
-              bun run ./bundle.ts
-              runHook postBuild
-            '';
-
-            installPhase = ''
-              runHook preInstall
-              mkdir -p $out/lib/melt $out/bin
-
-              cp -r dist node_modules $out/lib/melt
-
-              makeWrapper ${pkgs.bun}/bin/bun $out/bin/melt \
-                --add-flags "run" \
-                --add-flags "$out/lib/melt/dist/index.js" \
-                --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.nix ]} \
-                --argv0 melt
-
-              runHook postInstall
-            '';
-
-            meta = {
-              description = "A TUI for managing Nix flake inputs";
-              mainProgram = "melt";
-            };
-          };
-        }
-      );
-
-      devShells = eachSystem (system: {
-        default = pkgsFor.${system}.mkShell {
-          packages = with pkgsFor.${system}; [
-            biome
-            bun
-            bun2nix
+        buildInputs =
+          with pkgs;
+          [
+            openssl
+            libgit2
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+            pkgs.darwin.apple_sdk.frameworks.Security
+            pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
           ];
 
-          shellHook = ''
-            bun install --frozen-lockfile
+      in
+      {
+        packages.default = pkgs.rustPlatform.buildRustPackage {
+          pname = "melt";
+          version = "0.1.0";
+
+          src = ./.;
+
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+
+          inherit nativeBuildInputs buildInputs;
+
+          # Runtime dependencies
+          postInstall = ''
+            wrapProgram $out/bin/melt \
+              --prefix PATH : ${
+                pkgs.lib.makeBinPath [
+                  pkgs.nix
+                  pkgs.git
+                ]
+              }
           '';
+
+          nativeCheckInputs = [
+            pkgs.nix
+            pkgs.git
+          ];
+
+          meta = with pkgs.lib; {
+            description = "A TUI for managing Nix flake inputs";
+            homepage = "https://github.com/mholtzscher/melt";
+            license = licenses.mit;
+            maintainers = [ ];
+            mainProgram = "melt";
+          };
         };
-      });
-    };
+
+        devShells.default = pkgs.mkShell {
+          inherit buildInputs;
+
+          nativeBuildInputs =
+            nativeBuildInputs
+            ++ (with pkgs; [
+              cargo-watch
+              cargo-edit
+            ]);
+
+          RUST_BACKTRACE = 1;
+
+          # For git2 to find libgit2
+          LIBGIT2_SYS_USE_PKG_CONFIG = 1;
+        };
+      }
+    );
 }

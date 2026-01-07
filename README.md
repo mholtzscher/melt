@@ -1,44 +1,41 @@
 # melt
 
-A TUI for managing Nix flake inputs.
+A terminal UI for managing Nix flake inputs. View, update, and lock your flake inputs interactively.
 
-![list view](./assets/list.png)
-
-![changelog view](./assets/changelog.png)
+This is a Rust rewrite of [melt](https://github.com/anomalyco/melt), built with [ratatui](https://ratatui.rs).
 
 ## Features
 
-- View all flake inputs with revision, type, and last modified time
-- Check for available updates (shows commit count behind)
-- Update individual or all inputs
-- View changelog for GitHub inputs
-- Lock inputs to specific commits
+- **View flake inputs** - See all inputs with name, type, revision, and last modified time
+- **Check for updates** - Background checks show how many commits each input is behind
+- **Update inputs** - Update selected inputs or all at once
+- **View changelog** - Browse commit history for any git input
+- **Lock to commit** - Select a specific commit to lock an input to
+- **Multi-forge support** - GitHub, GitLab, SourceHut, Codeberg, and generic git
 
 ## Installation
 
-### With Nix (recommended)
+### With Nix
 
 ```bash
-nix run github:mholtzscher/melt
+nix run github:anomalyco/melt-rs
 ```
 
-Or add to your flake:
+Or add to your flake inputs:
 
 ```nix
 {
-  inputs.melt.url = "github:mholtzscher/melt";
+  inputs.melt.url = "github:anomalyco/melt-rs";
 }
 ```
 
 ### From source
 
-Requires [Bun](https://bun.sh):
-
 ```bash
-git clone https://github.com/mholtzscher/melt
-cd melt
-bun install
-bun run start
+git clone https://github.com/anomalyco/melt-rs
+cd melt-rs
+nix develop
+cargo build --release
 ```
 
 ## Usage
@@ -47,40 +44,88 @@ bun run start
 # Run in current directory
 melt
 
-# Run on a specific flake
+# Run in specific flake directory
 melt /path/to/flake
 ```
 
-## Keybindings
+## Key Bindings
 
-| Key     | Action                        |
-| ------- | ----------------------------- |
-| `j/k`   | Navigate up/down              |
-| `space` | Select input                  |
-| `u`     | Update selected inputs        |
-| `U`     | Update all inputs             |
-| `c`     | View changelog (GitHub only)  |
-| `r`     | Refresh                       |
-| `esc`   | Back / Clear selection / Quit |
+### List View
 
-### Changelog view
+| Key | Action |
+|-----|--------|
+| `j` / `↓` | Move down |
+| `k` / `↑` | Move up |
+| `Space` | Toggle selection |
+| `u` | Update selected inputs |
+| `U` | Update all inputs |
+| `c` | View changelog for current input |
+| `r` | Refresh flake metadata |
+| `q` / `Esc` | Quit |
 
-| Key     | Action                  |
-| ------- | ----------------------- |
-| `j/k`   | Navigate commits        |
-| `space` | Lock to selected commit |
-| `esc`   | Back to list            |
+### Changelog View
 
-## GitHub API
+| Key | Action |
+|-----|--------|
+| `j` / `↓` | Move down |
+| `k` / `↑` | Move up |
+| `Space` | Select commit for locking |
+| `y` | Confirm lock to selected commit |
+| `n` | Cancel lock |
+| `q` / `Esc` | Back to list |
 
-Set `GITHUB_TOKEN` for higher rate limits when checking updates:
+## Status Column
 
-```bash
-export GITHUB_TOKEN=ghp_...
-melt
+The STATUS column shows update status for git inputs:
+
+- ` ` (empty) - Not yet checked
+- `...` - Currently checking
+- `ok` - Up to date
+- `+N` - N commits behind (e.g., `+5` means 5 commits behind)
+
+## Architecture
+
+```
+src/
+├── main.rs           # CLI entry point
+├── app.rs            # Application state machine
+├── tui.rs            # Terminal setup/teardown
+├── event.rs          # Input handling
+├── error.rs          # Error types
+├── model/            # Data structures
+│   ├── flake.rs      # FlakeData, FlakeInput, ForgeType
+│   ├── commit.rs     # Commit, ChangelogData
+│   └── status.rs     # UpdateStatus
+├── service/          # Business logic
+│   ├── nix.rs        # Nix flake commands
+│   └── git.rs        # Git operations (via git2)
+├── ui/               # Rendering
+│   └── theme.rs      # Catppuccin Mocha colors
+└── util/
+    └── time.rs       # Relative time formatting
 ```
 
-Also supports `GH_TOKEN` and `GITHUB_PAT`.
+## Development
+
+```bash
+# Enter dev shell
+nix develop
+
+# Run
+cargo run -- /path/to/flake
+
+# Test
+cargo test
+
+# Build release
+cargo build --release
+```
+
+## Requirements
+
+- Nix with flakes enabled
+- Git (for changelog features, via libgit2)
+- SSH agent (for private repos)
 
 ## License
 

@@ -2,6 +2,7 @@
 name = "melt"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.75"
 description = "A TUI for managing Nix flake inputs"
 license = "MIT"
 repository = "https://github.com/mholtzscher/melt"
@@ -25,10 +26,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Git
-git2 = "0.19"
+git2 = { version = "0.19", features = ["vendored-libgit2", "vendored-openssl"] }
 
 # HTTP client for API calls
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # Error handling
 thiserror = "2"

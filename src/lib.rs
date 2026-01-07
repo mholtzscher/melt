@@ -33,6 +33,7 @@
 //! ```
 
 pub mod app;
+pub mod config;
 pub mod error;
 pub mod event;
 pub mod model;
@@ -43,10 +44,11 @@ pub mod util;
 
 // Re-export commonly used types at the crate root
 pub use app::App;
+pub use config::{ServiceConfig, Timeouts};
 pub use error::{AppError, AppResult, GitError};
 pub use model::{
     ChangelogData, Commit, FlakeData, FlakeInput, ForgeType, GitInput, OtherInput, PathInput,
     StatusLevel, StatusMessage, UpdateStatus,
 };
-pub use service::{GitService, NixService};
+pub use service::{GitOperations, GitService, NixOperations, NixService};
 pub use tui::Tui;

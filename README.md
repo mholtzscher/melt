@@ -121,6 +121,15 @@ cargo test
 cargo build --release
 ```
 
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_TOKEN` | GitHub personal access token for API authentication |
+| `GH_TOKEN` | Alternative to `GITHUB_TOKEN` (used by `gh` CLI) |
+
+Setting a GitHub token increases the API rate limit from 60 to 5000 requests/hour.
+
 ## Requirements
 
 - Nix with flakes enabled

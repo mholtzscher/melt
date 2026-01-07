@@ -872,6 +872,21 @@ fn render_help_bar(
         ));
     }
 
+    // Show error message for current input if it has an error status
+    if let Some(input) = list.flake.inputs.get(list.cursor) {
+        if let Some(UpdateStatus::Error(err)) = list.update_statuses.get(input.name()) {
+            let truncated = if err.len() > 60 {
+                format!("{}...", &err[..57])
+            } else {
+                err.clone()
+            };
+            spans.push(Span::styled(
+                format!(" | {}", truncated),
+                Style::default().fg(theme::ERROR),
+            ));
+        }
+    }
+
     if let Some(msg) = status_message {
         let color = match msg.level {
             crate::model::StatusLevel::Info => theme::INFO,

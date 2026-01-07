@@ -267,20 +267,38 @@ impl App {
     fn handle_task_result(&mut self, result: TaskResult) {
         match result {
             TaskResult::FlakeLoaded(Ok(flake)) => {
-                let mut table_state = TableState::default();
-                if !flake.inputs.is_empty() {
-                    table_state.select(Some(0));
-                }
-                // Clone inputs for checking updates
                 let inputs = flake.inputs.clone();
-                self.state = AppState::List(ListState {
-                    flake,
-                    cursor: 0,
-                    selected: std::collections::HashSet::new(),
-                    table_state,
-                    update_statuses: HashMap::new(),
-                    busy: false,
-                });
+                
+                // Check if we're refreshing (already in List state) or initial load
+                if let AppState::List(list) = &mut self.state {
+                    // Refresh: update flake data, keep cursor/selection, clear busy
+                    list.flake = flake;
+                    list.busy = false;
+                    // Clamp cursor to new input count
+                    if list.cursor >= list.flake.inputs.len() {
+                        list.cursor = list.flake.inputs.len().saturating_sub(1);
+                        list.table_state.select(Some(list.cursor));
+                    }
+                    // Clear selections that are now out of bounds
+                    list.selected.retain(|&i| i < list.flake.inputs.len());
+                    // Clear old update statuses
+                    list.update_statuses.clear();
+                } else {
+                    // Initial load: create fresh state
+                    let mut table_state = TableState::default();
+                    if !flake.inputs.is_empty() {
+                        table_state.select(Some(0));
+                    }
+                    self.state = AppState::List(ListState {
+                        flake,
+                        cursor: 0,
+                        selected: std::collections::HashSet::new(),
+                        table_state,
+                        update_statuses: HashMap::new(),
+                        busy: false,
+                    });
+                }
+                
                 // Clear any status message (e.g., "Refreshing...")
                 self.status_message = None;
                 // Start checking for updates in background
@@ -291,12 +309,11 @@ impl App {
             }
             TaskResult::UpdateComplete(Ok(())) => {
                 self.status_message = Some(StatusMessage::success("Update complete"));
-                // Clear selection and reload
+                // Clear selection and reload (keep list visible)
                 if let AppState::List(list) = &mut self.state {
                     list.selected.clear();
-                    list.busy = false;
+                    // Keep busy=true until FlakeLoaded arrives
                 }
-                self.state = AppState::Loading;
                 self.spawn_load_flake();
             }
             TaskResult::UpdateComplete(Err(e)) => {
@@ -332,8 +349,12 @@ impl App {
             }
             TaskResult::LockComplete(Ok(())) => {
                 self.status_message = Some(StatusMessage::success("Locked successfully"));
-                // Return to list and reload
-                self.state = AppState::Loading;
+                // Return to list and reload (keep list visible)
+                if let AppState::Changelog(cs) = std::mem::replace(&mut self.state, AppState::Loading) {
+                    let mut list = cs.parent_list;
+                    list.busy = true;
+                    self.state = AppState::List(list);
+                }
                 self.spawn_load_flake();
             }
             TaskResult::LockComplete(Err(e)) => {
@@ -478,8 +499,10 @@ impl App {
                 if is_busy {
                     return;
                 }
-                // Refresh
-                self.state = AppState::Loading;
+                // Refresh - keep list visible, just show status
+                if let AppState::List(list) = &mut self.state {
+                    list.busy = true;
+                }
                 self.status_message = Some(StatusMessage::info("Refreshing..."));
                 self.spawn_load_flake();
             }

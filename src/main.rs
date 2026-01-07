@@ -8,7 +8,7 @@ mod tui;
 mod ui;
 mod util;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, process::ExitCode};
 
 use clap::Parser;
 
@@ -26,30 +26,21 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> AppResult<()> {
-    // Parse command line arguments
-    let args = Args::parse();
-
-    // Install panic hook to restore terminal on panic
+async fn main() -> ExitCode {
     tui::install_panic_hook();
 
-    // Initialize terminal
-    let mut tui = match Tui::new() {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("Failed to initialize terminal: {}", e);
-            return Err(e);
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("{err}");
+            ExitCode::FAILURE
         }
-    };
-
-    // Create and run app
-    let mut app = App::new(args.flake);
-    if let Err(e) = app.run(&mut tui).await {
-        // Drop tui first to restore terminal
-        drop(tui);
-        eprintln!("Application error: {}", e);
-        return Err(e);
     }
+}
 
-    Ok(())
+async fn run() -> AppResult<()> {
+    let args = Args::parse();
+    let mut tui = Tui::new()?;
+    let mut app = App::new(args.flake);
+    app.run(&mut tui).await
 }

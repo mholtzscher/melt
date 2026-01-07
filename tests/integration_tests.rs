@@ -65,6 +65,7 @@ impl FlakeInput {
 
 // JSON structures for parsing
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct NixFlakeMetadata {
     description: Option<String>,
     #[serde(default)]

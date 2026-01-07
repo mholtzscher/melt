@@ -155,8 +155,6 @@ impl Clone for ListState {
 pub struct ChangelogState {
     /// The input we're showing changelog for
     pub input: GitInput,
-    /// Index of this input in the parent list
-    pub input_idx: usize,
     /// The changelog data
     pub data: ChangelogData,
     /// Current cursor position
@@ -171,12 +169,7 @@ pub struct ChangelogState {
 
 impl ChangelogState {
     /// Create a new ChangelogState
-    pub fn new(
-        input: GitInput,
-        input_idx: usize,
-        data: ChangelogData,
-        parent_list: ListState,
-    ) -> Self {
+    pub fn new(input: GitInput, data: ChangelogData, parent_list: ListState) -> Self {
         let cursor = data.locked_idx.unwrap_or(0);
         let mut table_state = TableState::default();
         if !data.commits.is_empty() {
@@ -184,7 +177,6 @@ impl ChangelogState {
         }
         Self {
             input,
-            input_idx,
             data,
             cursor,
             table_state,
@@ -231,7 +223,6 @@ impl ChangelogState {
 #[derive(Debug)]
 pub struct ChangelogLoadedData {
     pub input: GitInput,
-    pub input_idx: usize,
     pub data: ChangelogData,
     pub parent_list: ListState,
 }

@@ -19,8 +19,6 @@ pub fn poll_key(timeout: Duration) -> Option<KeyEvent> {
 /// Key event helper methods
 pub trait KeyEventExt {
     fn is_quit(&self) -> bool;
-    fn is_nav_up(&self) -> bool;
-    fn is_nav_down(&self) -> bool;
 }
 
 impl KeyEventExt for KeyEvent {
@@ -31,13 +29,5 @@ impl KeyEventExt for KeyEvent {
                 | (KeyCode::Esc, _)
                 | (KeyCode::Char('c'), KeyModifiers::CONTROL)
         )
-    }
-
-    fn is_nav_up(&self) -> bool {
-        matches!(self.code, KeyCode::Char('k') | KeyCode::Up)
-    }
-
-    fn is_nav_down(&self) -> bool {
-        matches!(self.code, KeyCode::Char('j') | KeyCode::Down)
     }
 }

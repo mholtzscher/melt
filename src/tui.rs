@@ -46,11 +46,6 @@ impl Tui {
         Ok(())
     }
 
-    /// Get mutable access to the underlying terminal
-    pub fn terminal(&mut self) -> &mut Terminal<CrosstermBackend<Stdout>> {
-        &mut self.terminal
-    }
-
     /// Draw a frame using the provided closure
     pub fn draw<F>(&mut self, f: F) -> AppResult<()>
     where

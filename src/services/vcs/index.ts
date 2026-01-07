@@ -94,10 +94,6 @@ export const vcsService: VCSService = {
 		return getSupportedInput(input) !== null;
 	},
 
-	supportsLocking(input: FlakeInput): boolean {
-		return getSupportedInput(input) !== null;
-	},
-
 	getLockUrl(input: FlakeInput, rev: string): string | null {
 		const repoInfo = getSupportedInput(input);
 		if (!repoInfo) {

@@ -227,7 +227,7 @@ struct NixOriginal {
 /// Parse nix metadata into our FlakeData structure
 fn parse_metadata(path: PathBuf, metadata: NixFlakeMetadata) -> FlakeData {
     let root_node = metadata.locks.nodes.get(&metadata.locks.root);
-    let inputs = root_node
+    let mut inputs: Vec<FlakeInput> = root_node
         .and_then(|n| n.inputs.as_ref())
         .map(|inputs| {
             inputs
@@ -248,6 +248,9 @@ fn parse_metadata(path: PathBuf, metadata: NixFlakeMetadata) -> FlakeData {
                 .collect()
         })
         .unwrap_or_default();
+
+    // Sort inputs alphabetically by name
+    inputs.sort_by(|a, b| a.name().to_lowercase().cmp(&b.name().to_lowercase()));
 
     FlakeData {
         path,

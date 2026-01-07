@@ -1,0 +1,102 @@
+{
+  "nodes": {
+    "codeberg-example": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1734500000,
+        "narHash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "rev": "b2bc6e288a4dbfadd0941dff026108136a81643e",
+        "type": "git",
+        "url": "https://codeberg.org/forgejo/forgejo"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://codeberg.org/forgejo/forgejo"
+      }
+    },
+    "git-example": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1735603200,
+        "narHash": "sha256-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
+        "rev": "8343ce6c52963f4fd89c0cc68557fb7a5fe04f1b",
+        "type": "git",
+        "url": "https://git.savannah.gnu.org/git/emacs.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://git.savannah.gnu.org/git/emacs.git"
+      }
+    },
+    "gitlab-example": {
+      "locked": {
+        "lastModified": 1734000000,
+        "narHash": "sha256-CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=",
+        "owner": "gitlab-org",
+        "repo": "gitlab-runner",
+        "rev": "01a66fc83c389ebd7c0d8f1cd881ef65af5f50a2",
+        "type": "gitlab"
+      },
+      "original": {
+        "owner": "gitlab-org",
+        "repo": "gitlab-runner",
+        "type": "gitlab"
+      }
+    },
+    "local-example": {
+      "flake": false,
+      "locked": {
+        "path": "./local-input",
+        "type": "path"
+      },
+      "original": {
+        "path": "./local-input",
+        "type": "path"
+      },
+      "parent": []
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1733500800,
+        "narHash": "sha256-EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "9f0c42f8bc7151b8e7e5840fb3bd454ad850d8c5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "codeberg-example": "codeberg-example",
+        "git-example": "git-example",
+        "gitlab-example": "gitlab-example",
+        "local-example": "local-example",
+        "nixpkgs": "nixpkgs",
+        "sourcehut-example": "sourcehut-example"
+      }
+    },
+    "sourcehut-example": {
+      "locked": {
+        "lastModified": 1735344000,
+        "narHash": "sha256-FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF=",
+        "owner": "~sircmpwn",
+        "repo": "hare",
+        "rev": "c578aa3cf6061520cbbc91658f4a8ad2b0b84e3b",
+        "type": "sourcehut"
+      },
+      "original": {
+        "owner": "~sircmpwn",
+        "repo": "hare",
+        "type": "sourcehut"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

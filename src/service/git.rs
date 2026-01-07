@@ -21,6 +21,8 @@ pub struct GitService {
     semaphore: Arc<Semaphore>,
     /// HTTP client for API requests
     client: Client,
+    /// GitHub token for API authentication (optional)
+    github_token: Option<String>,
 }
 
 impl GitService {
@@ -33,11 +35,17 @@ impl GitService {
             .build()
             .unwrap_or_default();
 
+        // Check for GitHub token (same env vars as gh CLI)
+        let github_token = std::env::var("GITHUB_TOKEN")
+            .or_else(|_| std::env::var("GH_TOKEN"))
+            .ok();
+
         Self {
             cache_dir,
             cancel_token,
             semaphore: Arc::new(Semaphore::new(10)),
             client,
+            github_token,
         }
     }
 
@@ -110,14 +118,36 @@ impl GitService {
             input.owner, input.repo, input.rev, branch
         );
 
-        let resp = self.client
-            .get(&url)
+        let mut req = self.client.get(&url);
+        if let Some(token) = &self.github_token {
+            req = req.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let resp = req
             .send()
             .await
             .map_err(|e| GitError::NetworkError(e.to_string()))?;
 
-        if !resp.status().is_success() {
-            // Fall back to git for private repos or rate limiting
+        let status = resp.status();
+        
+        // Check for rate limiting
+        if status.as_u16() == 403 || status.as_u16() == 429 {
+            let remaining = resp
+                .headers()
+                .get("x-ratelimit-remaining")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(0);
+            
+            if remaining == 0 {
+                return Err(GitError::NetworkError(
+                    "GitHub API rate limit exceeded. Set GITHUB_TOKEN for higher limits.".to_string()
+                ));
+            }
+        }
+
+        // For other errors (404 for private repos, etc.), fall back to git
+        if !status.is_success() {
             return self.check_git_updates(input).await;
         }
 
@@ -278,13 +308,35 @@ impl GitService {
             input.owner, input.repo, branch
         );
 
-        let resp = self.client
-            .get(&url)
+        let mut req = self.client.get(&url);
+        if let Some(token) = &self.github_token {
+            req = req.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let resp = req
             .send()
             .await
             .map_err(|e| GitError::NetworkError(e.to_string()))?;
 
-        if !resp.status().is_success() {
+        let status = resp.status();
+        
+        // Check for rate limiting
+        if status.as_u16() == 403 || status.as_u16() == 429 {
+            let remaining = resp
+                .headers()
+                .get("x-ratelimit-remaining")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(0);
+            
+            if remaining == 0 {
+                return Err(GitError::NetworkError(
+                    "GitHub API rate limit exceeded. Set GITHUB_TOKEN for higher limits.".to_string()
+                ));
+            }
+        }
+
+        if !status.is_success() {
             return self.get_git_changelog(input).await;
         }
 

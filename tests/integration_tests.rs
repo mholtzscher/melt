@@ -461,6 +461,98 @@ fn test_malformed_json_handling() {
 }
 
 #[test]
+fn test_missing_locked_fields() {
+    // Test handling of incomplete locked data
+    let lock_json = r#"{
+        "nodes": {
+            "nixpkgs": {
+                "locked": {
+                    "type": "github",
+                    "owner": "NixOS",
+                    "repo": "nixpkgs"
+                }
+            },
+            "root": {
+                "inputs": {
+                    "nixpkgs": "nixpkgs"
+                }
+            }
+        },
+        "root": "root",
+        "version": 7
+    }"#;
+    
+    let inputs = parse_lock_file(lock_json);
+    assert_eq!(inputs.len(), 1);
+    
+    if let Some(FlakeInput::Git(g)) = inputs.first() {
+        // Missing fields should be empty strings
+        assert!(g.rev.is_empty());
+        assert_eq!(g.last_modified, 0);
+        assert!(g.reference.is_none());
+    } else {
+        panic!("Expected Git input");
+    }
+}
+
+#[test]
+fn test_indirect_input_reference() {
+    // Test input that references another input via array notation
+    let lock_json = r#"{
+        "nodes": {
+            "flake-utils": {
+                "locked": {
+                    "type": "github",
+                    "owner": "numtide",
+                    "repo": "flake-utils",
+                    "rev": "abcdef1234567890",
+                    "lastModified": 1700000000
+                }
+            },
+            "nixpkgs": {
+                "locked": {
+                    "type": "github",
+                    "owner": "NixOS",
+                    "repo": "nixpkgs",
+                    "rev": "1234567890abcdef",
+                    "lastModified": 1700000000
+                }
+            },
+            "some-flake": {
+                "inputs": {
+                    "nixpkgs": ["nixpkgs"]
+                },
+                "locked": {
+                    "type": "github",
+                    "owner": "owner",
+                    "repo": "some-flake",
+                    "rev": "deadbeef12345678",
+                    "lastModified": 1700000000
+                }
+            },
+            "root": {
+                "inputs": {
+                    "flake-utils": "flake-utils",
+                    "nixpkgs": "nixpkgs",
+                    "some-flake": "some-flake"
+                }
+            }
+        },
+        "root": "root",
+        "version": 7
+    }"#;
+    
+    let inputs = parse_lock_file(lock_json);
+    assert_eq!(inputs.len(), 3, "Should have 3 inputs");
+    
+    // Verify all three are parsed
+    let names: Vec<&str> = inputs.iter().map(|i| i.name()).collect();
+    assert!(names.contains(&"flake-utils"));
+    assert!(names.contains(&"nixpkgs"));
+    assert!(names.contains(&"some-flake"));
+}
+
+#[test]
 fn test_url_building() {
     let locked = NixLocked::default();
     

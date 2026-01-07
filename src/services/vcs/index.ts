@@ -1,18 +1,11 @@
 import type { FlakeInput } from "../../types";
-// Use git CLI provider for everything - no API calls
 import { gitProvider } from "./providers/git";
 import type { ChangelogResult, RepoInfo, UpdateStatus, VCSService } from "./types";
 import { parseRepoInfo } from "./utils";
 
-// Re-export types
 export type { ChangelogResult, Commit, UpdateStatus } from "./types";
 
-/**
- * Check if an input is supported for VCS operations
- * Returns the parsed repo info if supported, null otherwise
- */
 function getSupportedInput(input: FlakeInput): RepoInfo | null {
-	// Skip path inputs - they're local and don't have remote VCS
 	if (input.type === "path") {
 		return null;
 	}
@@ -20,10 +13,6 @@ function getSupportedInput(input: FlakeInput): RepoInfo | null {
 	return parseRepoInfo(input);
 }
 
-/**
- * Unified VCS service using git CLI for all operations
- * No API calls - uses bare clone caching for efficiency
- */
 export const vcsService: VCSService = {
 	async checkForUpdates(
 		inputs: FlakeInput[],
@@ -31,7 +20,6 @@ export const vcsService: VCSService = {
 	): Promise<Map<string, UpdateStatus>> {
 		const results = new Map<string, UpdateStatus>();
 
-		// Filter to inputs we can check
 		const checkable: Array<{ input: FlakeInput; repoInfo: RepoInfo }> = [];
 
 		for (const input of inputs) {
@@ -49,7 +37,6 @@ export const vcsService: VCSService = {
 			}
 		}
 
-		// Process in parallel batches of 10
 		const BATCH_SIZE = 10;
 
 		for (let i = 0; i < checkable.length; i += BATCH_SIZE) {

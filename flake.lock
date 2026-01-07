@@ -6,10 +6,10 @@
       },
       "locked": {
         "lastModified": 1726493667,
-        "narHash": "sha256-yUzDcSIRJlai/6OrwH7n0uD+YNNj6DXzEK19zIR1rcQ=",
+        "narHash": "sha256-D+Dl5DV4x4LQxvPYir+/Sjo15Dv++LqCjfWISik595g=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "db82e07bd4c49c5e191d4a913f5875668f30fe63",
+        "rev": "58351e44283ebaf4fa49c4ec1e50754f6ec9ed5e",
         "type": "github"
       },
       "original": {

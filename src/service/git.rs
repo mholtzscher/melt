@@ -78,9 +78,10 @@ impl GitService {
                 break;
             }
 
-            let _permit = self.semaphore.acquire().await.map_err(|_| {
-                GitError::CloneFailed("Failed to acquire semaphore".to_string())
-            })?;
+            let _permit =
+                self.semaphore.acquire().await.map_err(|_| {
+                    GitError::CloneFailed("Failed to acquire semaphore".to_string())
+                })?;
 
             let status = match self.check_input_updates(input).await {
                 Ok(count) => {
@@ -129,7 +130,7 @@ impl GitService {
             .map_err(|e| GitError::NetworkError(e.to_string()))?;
 
         let status = resp.status();
-        
+
         // Check for rate limiting
         if status.as_u16() == 403 || status.as_u16() == 429 {
             let remaining = resp
@@ -138,10 +139,11 @@ impl GitService {
                 .and_then(|v| v.to_str().ok())
                 .and_then(|v| v.parse::<u32>().ok())
                 .unwrap_or(0);
-            
+
             if remaining == 0 {
                 return Err(GitError::NetworkError(
-                    "GitHub API rate limit exceeded. Set GITHUB_TOKEN for higher limits.".to_string()
+                    "GitHub API rate limit exceeded. Set GITHUB_TOKEN for higher limits."
+                        .to_string(),
                 ));
             }
         }
@@ -168,17 +170,18 @@ impl GitService {
     async fn check_gitlab_updates(&self, input: &GitInput) -> Result<usize, GitError> {
         let host = input.host.as_deref().unwrap_or("gitlab.com");
         let branch = input.reference.as_deref().unwrap_or("HEAD");
-        
+
         // URL-encode the project path
         let project = format!("{}/{}", input.owner, input.repo);
         let encoded_project = urlencoding(&project);
-        
+
         let url = format!(
             "https://{}/api/v4/projects/{}/repository/compare?from={}&to={}",
             host, encoded_project, input.rev, branch
         );
 
-        let resp = self.client
+        let resp = self
+            .client
             .get(&url)
             .send()
             .await
@@ -222,7 +225,8 @@ impl GitService {
             host, owner, input.repo, branch
         );
 
-        let resp = self.client
+        let resp = self
+            .client
             .get(&url)
             .send()
             .await
@@ -284,7 +288,9 @@ impl GitService {
             Ok(Ok(Ok(count))) => Ok(count),
             Ok(Ok(Err(e))) => Err(e),
             Ok(Err(e)) => Err(GitError::CloneFailed(format!("Task failed: {}", e))),
-            Err(_) => Err(GitError::NetworkError("Timeout checking updates".to_string())),
+            Err(_) => Err(GitError::NetworkError(
+                "Timeout checking updates".to_string(),
+            )),
         }
     }
 
@@ -301,7 +307,7 @@ impl GitService {
     /// Get changelog via GitHub API
     async fn get_github_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
         let branch = input.reference.as_deref().unwrap_or("HEAD");
-        
+
         // Get commits from branch
         let url = format!(
             "https://api.github.com/repos/{}/{}/commits?sha={}&per_page=100",
@@ -319,7 +325,7 @@ impl GitService {
             .map_err(|e| GitError::NetworkError(e.to_string()))?;
 
         let status = resp.status();
-        
+
         // Check for rate limiting
         if status.as_u16() == 403 || status.as_u16() == 429 {
             let remaining = resp
@@ -328,10 +334,11 @@ impl GitService {
                 .and_then(|v| v.to_str().ok())
                 .and_then(|v| v.parse::<u32>().ok())
                 .unwrap_or(0);
-            
+
             if remaining == 0 {
                 return Err(GitError::NetworkError(
-                    "GitHub API rate limit exceeded. Set GITHUB_TOKEN for higher limits.".to_string()
+                    "GitHub API rate limit exceeded. Set GITHUB_TOKEN for higher limits."
+                        .to_string(),
                 ));
             }
         }
@@ -372,14 +379,18 @@ impl GitService {
                 locked_idx = Some(idx);
             }
 
-            let date = c.commit.author
+            let date = c
+                .commit
+                .author
                 .as_ref()
                 .and_then(|a| a.date.as_ref())
                 .and_then(|d| chrono::DateTime::parse_from_rfc3339(d).ok())
                 .map(|d| d.with_timezone(&Utc))
                 .unwrap_or_else(Utc::now);
 
-            let author = c.commit.author
+            let author = c
+                .commit
+                .author
                 .as_ref()
                 .and_then(|a| a.name.clone())
                 .unwrap_or_else(|| "Unknown".to_string());
@@ -405,16 +416,17 @@ impl GitService {
     async fn get_gitlab_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
         let host = input.host.as_deref().unwrap_or("gitlab.com");
         let branch = input.reference.as_deref().unwrap_or("HEAD");
-        
+
         let project = format!("{}/{}", input.owner, input.repo);
         let encoded_project = urlencoding(&project);
-        
+
         let url = format!(
             "https://{}/api/v4/projects/{}/repository/commits?ref_name={}&per_page=100",
             host, encoded_project, branch
         );
 
-        let resp = self.client
+        let resp = self
+            .client
             .get(&url)
             .send()
             .await
@@ -480,7 +492,8 @@ impl GitService {
             host, owner, input.repo, branch
         );
 
-        let resp = self.client
+        let resp = self
+            .client
             .get(&url)
             .send()
             .await
@@ -559,7 +572,7 @@ impl GitService {
                 }
 
                 let repo = ensure_repo(&cache_path, &clone_url, reference.as_deref())?;
-                
+
                 let commits_ahead = get_commits_since(&repo, &rev, reference.as_deref())?;
                 let commits_from_locked = get_commits_from(&repo, &rev, 50)?;
 
@@ -588,7 +601,9 @@ impl GitService {
             Ok(Ok(Ok(data))) => Ok(data),
             Ok(Ok(Err(e))) => Err(e),
             Ok(Err(e)) => Err(GitError::CloneFailed(format!("Task failed: {}", e))),
-            Err(_) => Err(GitError::NetworkError("Timeout loading changelog".to_string())),
+            Err(_) => Err(GitError::NetworkError(
+                "Timeout loading changelog".to_string(),
+            )),
         }
     }
 
@@ -626,13 +641,15 @@ fn get_cache_dir() -> PathBuf {
 
 /// Get the clone URL for a git input
 fn get_clone_url(input: &GitInput) -> String {
-    input.forge_type.clone_url(&input.owner, &input.repo, input.host.as_deref())
+    input
+        .forge_type
+        .clone_url(&input.owner, &input.repo, input.host.as_deref())
 }
 
 /// Create git fetch options with SSH agent authentication
 fn create_fetch_options<'a>() -> FetchOptions<'a> {
     let mut callbacks = RemoteCallbacks::new();
-    
+
     callbacks.credentials(|_url, username_from_url, allowed_types| {
         if allowed_types.contains(git2::CredentialType::SSH_KEY) {
             let username = username_from_url.unwrap_or("git");
@@ -650,7 +667,11 @@ fn create_fetch_options<'a>() -> FetchOptions<'a> {
 }
 
 /// Ensure a bare repository exists in cache
-fn ensure_repo(cache_path: &Path, url: &str, reference: Option<&str>) -> Result<Repository, GitError> {
+fn ensure_repo(
+    cache_path: &Path,
+    url: &str,
+    reference: Option<&str>,
+) -> Result<Repository, GitError> {
     if let Some(parent) = cache_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| GitError::CacheError(e.to_string()))?;
     }
@@ -665,7 +686,11 @@ fn ensure_repo(cache_path: &Path, url: &str, reference: Option<&str>) -> Result<
 }
 
 /// Clone a bare repository
-fn clone_repo(cache_path: &Path, url: &str, reference: Option<&str>) -> Result<Repository, GitError> {
+fn clone_repo(
+    cache_path: &Path,
+    url: &str,
+    reference: Option<&str>,
+) -> Result<Repository, GitError> {
     let mut builder = git2::build::RepoBuilder::new();
     builder.bare(true);
     builder.fetch_options(create_fetch_options());
@@ -685,7 +710,7 @@ fn fetch_repo(repo: &Repository) -> Result<(), GitError> {
         .filter_map(|r| r.str().map(String::from))
         .collect();
     let refspec_strs: Vec<&str> = refspecs.iter().map(|s| s.as_str()).collect();
-    
+
     remote.fetch(&refspec_strs, Some(&mut create_fetch_options()), None)?;
     Ok(())
 }
@@ -697,9 +722,9 @@ fn get_commits_since(
     head_ref: Option<&str>,
 ) -> Result<Vec<Commit>, GitError> {
     let head_ref = head_ref.unwrap_or("HEAD");
-    
+
     let head_oid = resolve_ref(repo, head_ref)?;
-    
+
     let base_oid = match repo.revparse_single(base_rev) {
         Ok(obj) => obj.id(),
         Err(_) => return Ok(Vec::new()),
@@ -777,10 +802,7 @@ fn resolve_ref(repo: &Repository, refname: &str) -> Result<git2::Oid, GitError> 
 /// Convert a git2 commit to our Commit model
 fn commit_to_model(commit: &git2::Commit) -> Commit {
     let sha = commit.id().to_string();
-    let message = commit
-        .summary()
-        .unwrap_or("")
-        .to_string();
+    let message = commit.summary().unwrap_or("").to_string();
     let author = commit.author().name().unwrap_or("Unknown").to_string();
     let time = commit.time();
     let date = Utc
@@ -805,11 +827,11 @@ mod tests {
     fn test_cache_path() {
         let cancel = CancellationToken::new();
         let service = GitService::new(cancel);
-        
+
         let path1 = service.cache_path("https://github.com/NixOS/nixpkgs.git");
         let path2 = service.cache_path("https://github.com/NixOS/nixpkgs.git");
         let path3 = service.cache_path("https://github.com/other/repo.git");
-        
+
         assert_eq!(path1, path2);
         assert_ne!(path1, path3);
     }
@@ -827,7 +849,7 @@ mod tests {
             last_modified: 0,
             url: "github:NixOS/nixpkgs".to_string(),
         };
-        
+
         assert_eq!(
             get_clone_url(&input),
             "https://github.com/NixOS/nixpkgs.git"

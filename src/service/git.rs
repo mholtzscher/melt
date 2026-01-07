@@ -200,13 +200,8 @@ impl GitService {
         }
 
         #[derive(Deserialize)]
-        struct GitLabCommit {
-            id: String,
-        }
-
-        #[derive(Deserialize)]
         struct CompareResponse {
-            commits: Vec<GitLabCommit>,
+            commits: Vec<serde_json::Value>,
         }
 
         let data: CompareResponse = resp
@@ -631,23 +626,6 @@ impl GitService {
             .collect();
 
         self.cache_dir.join(format!("{}_{:x}", safe_name, hash))
-    }
-}
-
-impl super::traits::GitOperations for GitService {
-    async fn check_updates<F>(
-        &self,
-        inputs: &[FlakeInput],
-        on_status: F,
-    ) -> Result<(), GitError>
-    where
-        F: FnMut(&str, UpdateStatus) + Send,
-    {
-        GitService::check_updates(self, inputs, on_status).await
-    }
-
-    async fn get_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
-        GitService::get_changelog(self, input).await
     }
 }
 

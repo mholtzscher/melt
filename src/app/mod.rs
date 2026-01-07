@@ -22,7 +22,7 @@ use crate::tui::Tui;
 use crate::ui::render;
 
 pub use handler::Action;
-pub use state::{AppState, ChangelogLoadedData, ChangelogState, ListState, StateKind, TaskResult};
+pub use state::{AppState, ChangelogLoadedData, ChangelogState, ListState, TaskResult};
 
 /// Main application struct
 pub struct App {
@@ -169,7 +169,7 @@ impl App {
                         parent.busy = false;
                         self.status_message = Some(StatusMessage::info("Loading changelog..."));
                         self.state = AppState::LoadingChangelog(parent.clone());
-                        self.spawn_load_changelog(input, input_idx, parent);
+                        self.spawn_load_changelog(input, parent);
                     }
                 }
             }
@@ -236,7 +236,6 @@ impl App {
             TaskResult::ChangelogLoaded(Ok(data)) => {
                 self.state = AppState::Changelog(ChangelogState::new(
                     data.input,
-                    data.input_idx,
                     data.data,
                     data.parent_list,
                 ));
@@ -315,7 +314,7 @@ impl App {
     }
 
     /// Spawn a background task to load changelog
-    fn spawn_load_changelog(&self, input: GitInput, input_idx: usize, parent_list: ListState) {
+    fn spawn_load_changelog(&self, input: GitInput, parent_list: ListState) {
         let git = self.git.clone();
         let tx = self.task_tx.clone();
 
@@ -324,7 +323,6 @@ impl App {
             let _ = tx.send(TaskResult::ChangelogLoaded(result.map(|data| {
                 ChangelogLoadedData {
                     input,
-                    input_idx,
                     data,
                     parent_list,
                 }

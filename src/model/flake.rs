@@ -4,7 +4,6 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub struct FlakeData {
     pub path: PathBuf,
-    pub description: Option<String>,
     pub inputs: Vec<FlakeInput>,
 }
 
@@ -34,14 +33,12 @@ pub struct GitInput {
 #[derive(Debug, Clone)]
 pub struct PathInput {
     pub name: String,
-    pub path: String,
 }
 
 /// Other input types (tarball, file, etc.)
 #[derive(Debug, Clone)]
 pub struct OtherInput {
     pub name: String,
-    pub url: String,
     pub rev: String,
     pub last_modified: i64,
 }
@@ -76,15 +73,6 @@ impl FlakeInput {
         }
     }
 
-    /// Get the full revision if available
-    pub fn rev(&self) -> Option<&str> {
-        match self {
-            FlakeInput::Git(g) => Some(&g.rev),
-            FlakeInput::Path(_) => None,
-            FlakeInput::Other(o) => Some(&o.rev),
-        }
-    }
-
     /// Get the last modified timestamp if available
     pub fn last_modified(&self) -> Option<i64> {
         match self {
@@ -100,23 +88,6 @@ impl FlakeInput {
             FlakeInput::Git(_) => "git",
             FlakeInput::Path(_) => "path",
             FlakeInput::Other(_) => "other",
-        }
-    }
-
-    /// Get the URL if available
-    pub fn url(&self) -> Option<&str> {
-        match self {
-            FlakeInput::Git(g) => Some(&g.url),
-            FlakeInput::Path(p) => Some(&p.path),
-            FlakeInput::Other(o) => Some(&o.url),
-        }
-    }
-
-    /// Check if this input is a git input
-    pub fn as_git(&self) -> Option<&GitInput> {
-        match self {
-            FlakeInput::Git(g) => Some(g),
-            _ => None,
         }
     }
 }

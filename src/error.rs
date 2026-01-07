@@ -7,9 +7,6 @@ pub enum AppError {
     #[error("No flake.nix found in {0}")]
     FlakeNotFound(PathBuf),
 
-    #[error("Nix is not installed or not in PATH")]
-    NixNotInstalled,
-
     #[error("Nix command failed: {0}")]
     NixCommandFailed(String),
 
@@ -21,9 +18,6 @@ pub enum AppError {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-
-    #[error("Terminal error: {0}")]
-    Terminal(String),
 }
 
 /// Git-specific errors
@@ -31,9 +25,6 @@ pub enum AppError {
 pub enum GitError {
     #[error("Failed to clone repository: {0}")]
     CloneFailed(String),
-
-    #[error("Failed to fetch updates: {0}")]
-    FetchFailed(String),
 
     #[error("Repository not found")]
     NotFound,
@@ -46,9 +37,6 @@ pub enum GitError {
 
     #[error("Network error: {0}")]
     NetworkError(String),
-
-    #[error("Invalid repository URL: {0}")]
-    InvalidUrl(String),
 
     #[error("Cache directory error: {0}")]
     CacheError(String),

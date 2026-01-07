@@ -17,16 +17,6 @@ pub enum UpdateStatus {
 }
 
 impl UpdateStatus {
-    /// Check if status indicates checking is in progress
-    pub fn is_checking(&self) -> bool {
-        matches!(self, UpdateStatus::Checking)
-    }
-
-    /// Check if there's an error
-    pub fn is_error(&self) -> bool {
-        matches!(self, UpdateStatus::Error(_))
-    }
-
     /// Get display string for the status
     pub fn display(&self) -> String {
         match self {

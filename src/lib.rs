@@ -50,5 +50,5 @@ pub use model::{
     ChangelogData, Commit, FlakeData, FlakeInput, ForgeType, GitInput, OtherInput, PathInput,
     StatusLevel, StatusMessage, UpdateStatus,
 };
-pub use service::{GitOperations, GitService, NixOperations, NixService};
+pub use service::{GitService, NixService};
 pub use tui::Tui;

@@ -47,11 +47,6 @@ impl NixService {
         Ok(parse_metadata(flake_path, metadata))
     }
 
-    /// Refresh flake metadata (re-read from disk)
-    pub async fn refresh(&self, path: &Path) -> AppResult<FlakeData> {
-        self.load_metadata(path).await
-    }
-
     /// Update specific inputs
     pub async fn update_inputs(&self, path: &Path, names: &[String]) -> AppResult<()> {
         if names.is_empty() {
@@ -143,24 +138,6 @@ impl NixService {
     }
 }
 
-impl super::traits::NixOperations for NixService {
-    async fn load_metadata(&self, path: &Path) -> AppResult<FlakeData> {
-        NixService::load_metadata(self, path).await
-    }
-
-    async fn update_inputs(&self, path: &Path, names: &[String]) -> AppResult<()> {
-        NixService::update_inputs(self, path, names).await
-    }
-
-    async fn update_all(&self, path: &Path) -> AppResult<()> {
-        NixService::update_all(self, path).await
-    }
-
-    async fn lock_input(&self, path: &Path, name: &str, override_url: &str) -> AppResult<()> {
-        NixService::lock_input(self, path, name, override_url).await
-    }
-}
-
 /// Resolve flake path - if it ends with flake.nix, get the parent directory
 fn resolve_flake_path(path: &Path) -> AppResult<PathBuf> {
     let path = if path.to_string_lossy().is_empty() || path.to_string_lossy() == "." {
@@ -187,6 +164,7 @@ fn resolve_flake_path(path: &Path) -> AppResult<PathBuf> {
 // Using deny_unknown_fields = false (default) to handle different nix versions
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct NixFlakeMetadata {
     description: Option<String>,
     #[serde(default)]
@@ -212,6 +190,7 @@ struct NixNode {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)]
 struct NixLocked {
     #[serde(rename = "type", default)]
     type_: Option<String>,
@@ -232,6 +211,7 @@ struct NixLocked {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[allow(dead_code)]
 struct NixOriginal {
     #[serde(rename = "type", default)]
     type_: Option<String>,
@@ -275,11 +255,7 @@ fn parse_metadata(path: PathBuf, metadata: NixFlakeMetadata) -> FlakeData {
     // Sort inputs alphabetically by name
     inputs.sort_by(|a, b| a.name().to_lowercase().cmp(&b.name().to_lowercase()));
 
-    FlakeData {
-        path,
-        description: metadata.description,
-        inputs,
-    }
+    FlakeData { path, inputs }
 }
 
 /// Parse owner and repo from a git URL
@@ -324,10 +300,7 @@ fn parse_owner_repo_from_url(url: &str) -> Option<(String, String)> {
 
         // Drop authority (host / user@host:port)
         let path = rest.split_once('/')?.1;
-        let path = path
-            .split(|c| c == '?' || c == '#')
-            .next()
-            .unwrap_or(path);
+        let path = path.split(|c| c == '?' || c == '#').next().unwrap_or(path);
 
         return parse_owner_repo_from_path(path);
     }
@@ -335,10 +308,7 @@ fn parse_owner_repo_from_url(url: &str) -> Option<(String, String)> {
     // SCP-style: git@host:owner/repo.git
     if url.contains(':') && !url.contains("://") {
         let (_, path) = url.split_once(':')?;
-        let path = path
-            .split(|c| c == '?' || c == '#')
-            .next()
-            .unwrap_or(path);
+        let path = path.split(|c| c == '?' || c == '#').next().unwrap_or(path);
 
         return parse_owner_repo_from_path(path);
     }
@@ -383,15 +353,8 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
             };
 
             let Some((owner, repo)) = owner_repo else {
-                let url = locked
-                    .url
-                    .clone()
-                    .or_else(|| original.and_then(|o| o.url.clone()))
-                    .unwrap_or_else(|| "unknown".to_string());
-
                 return Some(FlakeInput::Other(OtherInput {
                     name: name.to_string(),
-                    url,
                     rev: locked.rev.clone().unwrap_or_default(),
                     last_modified: locked.last_modified.unwrap_or(0),
                 }));
@@ -416,32 +379,14 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
                 url,
             }))
         }
-        "path" => {
-            let path = locked
-                .path
-                .clone()
-                .or_else(|| original.and_then(|o| o.path.clone()))
-                .unwrap_or_default();
-
-            Some(FlakeInput::Path(PathInput {
-                name: name.to_string(),
-                path,
-            }))
-        }
-        _ => {
-            let url = locked
-                .url
-                .clone()
-                .or_else(|| original.and_then(|o| o.url.clone()))
-                .unwrap_or_else(|| "unknown".to_string());
-
-            Some(FlakeInput::Other(OtherInput {
-                name: name.to_string(),
-                url,
-                rev: locked.rev.clone().unwrap_or_default(),
-                last_modified: locked.last_modified.unwrap_or(0),
-            }))
-        }
+        "path" => Some(FlakeInput::Path(PathInput {
+            name: name.to_string(),
+        })),
+        _ => Some(FlakeInput::Other(OtherInput {
+            name: name.to_string(),
+            rev: locked.rev.clone().unwrap_or_default(),
+            last_modified: locked.last_modified.unwrap_or(0),
+        })),
     }
 }
 

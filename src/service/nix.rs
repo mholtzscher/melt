@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::time::Duration;
 
 use serde::Deserialize;
+
+use crate::config::ServiceConfig;
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
@@ -12,12 +15,20 @@ use crate::model::{FlakeData, FlakeInput, ForgeType, GitInput, OtherInput, PathI
 #[derive(Clone)]
 pub struct NixService {
     cancel_token: CancellationToken,
+    nix_command_timeout: Duration,
 }
 
 impl NixService {
     /// Create a new NixService
     pub fn new(cancel_token: CancellationToken) -> Self {
-        Self { cancel_token }
+        Self::new_with_config(cancel_token, ServiceConfig::default())
+    }
+
+    pub fn new_with_config(cancel_token: CancellationToken, config: ServiceConfig) -> Self {
+        Self {
+            cancel_token,
+            nix_command_timeout: config.timeouts.nix_command,
+        }
     }
 
     /// Load flake metadata from the given path
@@ -108,8 +119,7 @@ impl NixService {
         let mut cmd = Command::new("nix");
         cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
 
-        // Add timeout of 30 seconds
-        let timeout = tokio::time::timeout(std::time::Duration::from_secs(30), cmd.output());
+        let timeout = tokio::time::timeout(self.nix_command_timeout, cmd.output());
 
         let output = tokio::select! {
             result = timeout => {
@@ -130,6 +140,24 @@ impl NixService {
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+}
+
+impl super::traits::NixOperations for NixService {
+    async fn load_metadata(&self, path: &Path) -> AppResult<FlakeData> {
+        NixService::load_metadata(self, path).await
+    }
+
+    async fn update_inputs(&self, path: &Path, names: &[String]) -> AppResult<()> {
+        NixService::update_inputs(self, path, names).await
+    }
+
+    async fn update_all(&self, path: &Path) -> AppResult<()> {
+        NixService::update_all(self, path).await
+    }
+
+    async fn lock_input(&self, path: &Path, name: &str, override_url: &str) -> AppResult<()> {
+        NixService::lock_input(self, path, name, override_url).await
     }
 }
 
@@ -254,6 +282,70 @@ fn parse_metadata(path: PathBuf, metadata: NixFlakeMetadata) -> FlakeData {
     }
 }
 
+/// Parse owner and repo from a git URL
+fn parse_owner_repo_from_url(url: &str) -> Option<(String, String)> {
+    fn parse_owner_repo_from_path(path: &str) -> Option<(String, String)> {
+        let mut segments: Vec<&str> = path
+            .split(|c| c == '/' || c == '\\')
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if segments.len() < 2 {
+            return None;
+        }
+
+        let repo_segment = segments.pop()?;
+        let repo = repo_segment.trim_end_matches(".git");
+        if repo.is_empty() {
+            return None;
+        }
+
+        let owner = segments.join("/");
+        if owner.is_empty() {
+            return None;
+        }
+
+        Some((owner, repo.to_string()))
+    }
+
+    let url = url.trim();
+    if url.is_empty() {
+        return None;
+    }
+
+    let url = url.strip_prefix("git+").unwrap_or(url);
+
+    // Scheme URLs: https://host/owner/repo, ssh://git@host:port/owner/repo
+    if url.starts_with("https://") || url.starts_with("http://") || url.starts_with("ssh://") {
+        let rest = url
+            .strip_prefix("https://")
+            .or_else(|| url.strip_prefix("http://"))
+            .or_else(|| url.strip_prefix("ssh://"))?;
+
+        // Drop authority (host / user@host:port)
+        let path = rest.split_once('/')?.1;
+        let path = path
+            .split(|c| c == '?' || c == '#')
+            .next()
+            .unwrap_or(path);
+
+        return parse_owner_repo_from_path(path);
+    }
+
+    // SCP-style: git@host:owner/repo.git
+    if url.contains(':') && !url.contains("://") {
+        let (_, path) = url.split_once(':')?;
+        let path = path
+            .split(|c| c == '?' || c == '#')
+            .next()
+            .unwrap_or(path);
+
+        return parse_owner_repo_from_path(path);
+    }
+
+    None
+}
+
 /// Parse a single input node
 fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
     let locked = node.locked.as_ref()?;
@@ -268,16 +360,42 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
     match type_ {
         "github" | "gitlab" | "sourcehut" | "git" => {
             let forge_type = detect_forge_type(type_, locked, original);
-            let owner = locked
+
+            let meta_owner = locked
                 .owner
                 .clone()
-                .or_else(|| original.and_then(|o| o.owner.clone()))
-                .unwrap_or_default();
-            let repo = locked
+                .or_else(|| original.and_then(|o| o.owner.clone()));
+            let meta_repo = locked
                 .repo
                 .clone()
-                .or_else(|| original.and_then(|o| o.repo.clone()))
-                .unwrap_or_default();
+                .or_else(|| original.and_then(|o| o.repo.clone()));
+
+            let url_for_parse = locked
+                .url
+                .as_deref()
+                .or_else(|| original.and_then(|o| o.url.as_deref()));
+
+            let owner_repo = match (meta_owner, meta_repo) {
+                (Some(owner), Some(repo)) if !owner.is_empty() && !repo.is_empty() => {
+                    Some((owner, repo))
+                }
+                _ => url_for_parse.and_then(parse_owner_repo_from_url),
+            };
+
+            let Some((owner, repo)) = owner_repo else {
+                let url = locked
+                    .url
+                    .clone()
+                    .or_else(|| original.and_then(|o| o.url.clone()))
+                    .unwrap_or_else(|| "unknown".to_string());
+
+                return Some(FlakeInput::Other(OtherInput {
+                    name: name.to_string(),
+                    url,
+                    rev: locked.rev.clone().unwrap_or_default(),
+                    last_modified: locked.last_modified.unwrap_or(0),
+                }));
+            };
             let host = locked
                 .host
                 .clone()
@@ -426,5 +544,69 @@ mod tests {
             detect_forge_type("gitlab", &locked, None),
             ForgeType::GitLab
         );
+    }
+
+    #[test]
+    fn test_parse_owner_repo_from_url_https() {
+        assert_eq!(
+            parse_owner_repo_from_url("https://codeberg.org/LGFae/awww"),
+            Some(("LGFae".to_string(), "awww".to_string()))
+        );
+        assert_eq!(
+            parse_owner_repo_from_url("https://github.com/NixOS/nixpkgs.git"),
+            Some(("NixOS".to_string(), "nixpkgs".to_string()))
+        );
+        assert_eq!(
+            parse_owner_repo_from_url("https://gitlab.com/owner/repo"),
+            Some(("owner".to_string(), "repo".to_string()))
+        );
+        assert_eq!(
+            parse_owner_repo_from_url("https://gitlab.com/group/subgroup/repo.git"),
+            Some(("group/subgroup".to_string(), "repo".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_owner_repo_from_url_ssh_scp_style() {
+        assert_eq!(
+            parse_owner_repo_from_url("git@github.com:owner/repo.git"),
+            Some(("owner".to_string(), "repo".to_string()))
+        );
+        assert_eq!(
+            parse_owner_repo_from_url("git@codeberg.org:LGFae/awww.git"),
+            Some(("LGFae".to_string(), "awww".to_string()))
+        );
+        assert_eq!(
+            parse_owner_repo_from_url("git@gitlab.com:group/subgroup/repo.git"),
+            Some(("group/subgroup".to_string(), "repo".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_owner_repo_from_url_ssh_scheme() {
+        assert_eq!(
+            parse_owner_repo_from_url("ssh://git@github.com/owner/repo.git"),
+            Some(("owner".to_string(), "repo".to_string()))
+        );
+        assert_eq!(
+            parse_owner_repo_from_url("ssh://git@example.com:2222/owner/repo.git"),
+            Some(("owner".to_string(), "repo".to_string()))
+        );
+        assert_eq!(
+            parse_owner_repo_from_url("ssh://git@gitlab.com/group/subgroup/repo.git"),
+            Some(("group/subgroup".to_string(), "repo".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_owner_repo_from_url_edge_cases() {
+        assert_eq!(
+            parse_owner_repo_from_url("https://github.com/owner/repo/"),
+            Some(("owner".to_string(), "repo".to_string()))
+        );
+        assert_eq!(parse_owner_repo_from_url("invalid-url"), None);
+        assert_eq!(parse_owner_repo_from_url(""), None);
+        assert_eq!(parse_owner_repo_from_url("https://github.com/"), None);
+        assert_eq!(parse_owner_repo_from_url("https://github.com/owner/"), None);
     }
 }

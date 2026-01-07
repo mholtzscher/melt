@@ -1,10 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
 use chrono::{TimeZone, Utc};
 use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
 use reqwest::Client;
+
+use crate::config::ServiceConfig;
 use serde::Deserialize;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
@@ -23,14 +24,20 @@ pub struct GitService {
     client: Client,
     /// GitHub token for API authentication (optional)
     github_token: Option<String>,
+    timeouts: crate::config::Timeouts,
 }
 
 impl GitService {
     /// Create a new GitService
     pub fn new(cancel_token: CancellationToken) -> Self {
+        Self::new_with_config(cancel_token, ServiceConfig::default())
+    }
+
+    pub fn new_with_config(cancel_token: CancellationToken, config: ServiceConfig) -> Self {
         let cache_dir = get_cache_dir();
+        let timeouts = config.timeouts.clone();
         let client = Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(timeouts.http_request)
             .user_agent("melt/0.1.0")
             .build()
             .unwrap_or_default();
@@ -43,9 +50,10 @@ impl GitService {
         Self {
             cache_dir,
             cancel_token,
-            semaphore: Arc::new(Semaphore::new(10)),
+            semaphore: Arc::new(Semaphore::new(config.git_concurrency)),
             client,
             github_token,
+            timeouts,
         }
     }
 
@@ -271,7 +279,7 @@ impl GitService {
 
         // Run with timeout
         let result = tokio::time::timeout(
-            Duration::from_secs(60),
+            self.timeouts.git_update_check,
             tokio::task::spawn_blocking(move || {
                 if cancel.is_cancelled() {
                     return Err(GitError::CloneFailed("Cancelled".to_string()));
@@ -565,7 +573,7 @@ impl GitService {
         let cancel = self.cancel_token.clone();
 
         let result = tokio::time::timeout(
-            Duration::from_secs(120),
+            self.timeouts.git_changelog,
             tokio::task::spawn_blocking(move || {
                 if cancel.is_cancelled() {
                     return Err(GitError::CloneFailed("Cancelled".to_string()));
@@ -623,6 +631,23 @@ impl GitService {
             .collect();
 
         self.cache_dir.join(format!("{}_{:x}", safe_name, hash))
+    }
+}
+
+impl super::traits::GitOperations for GitService {
+    async fn check_updates<F>(
+        &self,
+        inputs: &[FlakeInput],
+        on_status: F,
+    ) -> Result<(), GitError>
+    where
+        F: FnMut(&str, UpdateStatus) + Send,
+    {
+        GitService::check_updates(self, inputs, on_status).await
+    }
+
+    async fn get_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
+        GitService::get_changelog(self, input).await
     }
 }
 

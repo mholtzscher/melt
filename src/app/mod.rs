@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::AppResult;
 use crate::event::poll_key;
-use crate::model::{FlakeInput, GitInput, StatusMessage, UpdateStatus};
+use crate::model::{FlakeInput, GitInput, StatusMessage};
 use crate::service::{GitService, NixService};
 use crate::tui::Tui;
 use crate::ui::render;

@@ -1,4 +1,5 @@
 mod app;
+mod config;
 mod error;
 mod event;
 mod model;

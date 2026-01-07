@@ -1,33 +1,43 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use chrono::{TimeZone, Utc};
 use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
+use reqwest::Client;
+use serde::Deserialize;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::GitError;
-use crate::model::{ChangelogData, Commit, FlakeInput, GitInput, UpdateStatus};
-#[cfg(test)]
-use crate::model::ForgeType;
+use crate::model::{ChangelogData, Commit, FlakeInput, ForgeType, GitInput, UpdateStatus};
 
-/// Service for git operations using git2
+/// Service for git operations - uses APIs where possible, falls back to git2
 #[derive(Clone)]
 pub struct GitService {
     cache_dir: PathBuf,
     cancel_token: CancellationToken,
-    /// Semaphore to limit concurrent git operations
+    /// Semaphore to limit concurrent operations
     semaphore: Arc<Semaphore>,
+    /// HTTP client for API requests
+    client: Client,
 }
 
 impl GitService {
     /// Create a new GitService
     pub fn new(cancel_token: CancellationToken) -> Self {
         let cache_dir = get_cache_dir();
+        let client = Client::builder()
+            .timeout(Duration::from_secs(30))
+            .user_agent("melt/0.1.0")
+            .build()
+            .unwrap_or_default();
+
         Self {
             cache_dir,
             cancel_token,
-            semaphore: Arc::new(Semaphore::new(10)), // Max 10 concurrent operations
+            semaphore: Arc::new(Semaphore::new(10)),
+            client,
         }
     }
 
@@ -81,71 +91,453 @@ impl GitService {
         Ok(())
     }
 
-    /// Check for updates on a single input
+    /// Check for updates on a single input - uses API when possible
     async fn check_input_updates(&self, input: &GitInput) -> Result<usize, GitError> {
-        let clone_url = get_clone_url(input);
-        let cache_path = self.cache_path(&clone_url);
-        let reference = input.reference.clone();
-        let rev = input.rev.clone();
-        let cancel = self.cancel_token.clone();
-
-        // Run git operations in blocking task
-        tokio::task::spawn_blocking(move || {
-            if cancel.is_cancelled() {
-                return Err(GitError::CloneFailed("Cancelled".to_string()));
-            }
-
-            let repo = ensure_repo(&cache_path, &clone_url, reference.as_deref())?;
-            let commits = get_commits_since(&repo, &rev, reference.as_deref())?;
-            Ok(commits.len())
-        })
-        .await
-        .map_err(|e| GitError::CloneFailed(e.to_string()))?
+        match input.forge_type {
+            ForgeType::GitHub => self.check_github_updates(input).await,
+            ForgeType::GitLab => self.check_gitlab_updates(input).await,
+            ForgeType::SourceHut => self.check_sourcehut_updates(input).await,
+            // For Codeberg/Gitea/Generic, fall back to git2 with timeout
+            _ => self.check_git_updates(input).await,
+        }
     }
 
-    /// Get changelog for an input
-    pub async fn get_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
+    /// Check updates via GitHub API
+    async fn check_github_updates(&self, input: &GitInput) -> Result<usize, GitError> {
+        let branch = input.reference.as_deref().unwrap_or("HEAD");
+        let url = format!(
+            "https://api.github.com/repos/{}/{}/compare/{}...{}",
+            input.owner, input.repo, input.rev, branch
+        );
+
+        let resp = self.client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            // Fall back to git for private repos or rate limiting
+            return self.check_git_updates(input).await;
+        }
+
+        #[derive(Deserialize)]
+        struct CompareResponse {
+            ahead_by: usize,
+        }
+
+        let data: CompareResponse = resp
+            .json()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        Ok(data.ahead_by)
+    }
+
+    /// Check updates via GitLab API
+    async fn check_gitlab_updates(&self, input: &GitInput) -> Result<usize, GitError> {
+        let host = input.host.as_deref().unwrap_or("gitlab.com");
+        let branch = input.reference.as_deref().unwrap_or("HEAD");
+        
+        // URL-encode the project path
+        let project = format!("{}/{}", input.owner, input.repo);
+        let encoded_project = urlencoding(&project);
+        
+        let url = format!(
+            "https://{}/api/v4/projects/{}/repository/compare?from={}&to={}",
+            host, encoded_project, input.rev, branch
+        );
+
+        let resp = self.client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return self.check_git_updates(input).await;
+        }
+
+        #[derive(Deserialize)]
+        struct GitLabCommit {
+            id: String,
+        }
+
+        #[derive(Deserialize)]
+        struct CompareResponse {
+            commits: Vec<GitLabCommit>,
+        }
+
+        let data: CompareResponse = resp
+            .json()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        Ok(data.commits.len())
+    }
+
+    /// Check updates via SourceHut API
+    async fn check_sourcehut_updates(&self, input: &GitInput) -> Result<usize, GitError> {
+        let host = input.host.as_deref().unwrap_or("git.sr.ht");
+        let owner = if input.owner.starts_with('~') {
+            input.owner.clone()
+        } else {
+            format!("~{}", input.owner)
+        };
+        let branch = input.reference.as_deref().unwrap_or("HEAD");
+
+        // SourceHut API: get log from branch
+        let url = format!(
+            "https://{}/api/{}/{}/log/{}",
+            host, owner, input.repo, branch
+        );
+
+        let resp = self.client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return self.check_git_updates(input).await;
+        }
+
+        #[derive(Deserialize)]
+        struct SrhtCommit {
+            id: String,
+        }
+
+        #[derive(Deserialize)]
+        struct LogResponse {
+            results: Vec<SrhtCommit>,
+        }
+
+        let data: LogResponse = resp
+            .json()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        // Count commits until we find the locked rev
+        let count = data
+            .results
+            .iter()
+            .take_while(|c| !c.id.starts_with(&input.rev) && input.rev != c.id)
+            .count();
+
+        Ok(count)
+    }
+
+    /// Check updates via git2 (fallback for non-API forges)
+    async fn check_git_updates(&self, input: &GitInput) -> Result<usize, GitError> {
         let clone_url = get_clone_url(input);
         let cache_path = self.cache_path(&clone_url);
         let reference = input.reference.clone();
         let rev = input.rev.clone();
         let cancel = self.cancel_token.clone();
 
-        tokio::task::spawn_blocking(move || {
-            if cancel.is_cancelled() {
-                return Err(GitError::CloneFailed("Cancelled".to_string()));
+        // Run with timeout
+        let result = tokio::time::timeout(
+            Duration::from_secs(60),
+            tokio::task::spawn_blocking(move || {
+                if cancel.is_cancelled() {
+                    return Err(GitError::CloneFailed("Cancelled".to_string()));
+                }
+
+                let repo = ensure_repo(&cache_path, &clone_url, reference.as_deref())?;
+                let commits = get_commits_since(&repo, &rev, reference.as_deref())?;
+                Ok(commits.len())
+            }),
+        )
+        .await;
+
+        match result {
+            Ok(Ok(Ok(count))) => Ok(count),
+            Ok(Ok(Err(e))) => Err(e),
+            Ok(Err(e)) => Err(GitError::CloneFailed(format!("Task failed: {}", e))),
+            Err(_) => Err(GitError::NetworkError("Timeout checking updates".to_string())),
+        }
+    }
+
+    /// Get changelog for an input - uses API when possible
+    pub async fn get_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
+        match input.forge_type {
+            ForgeType::GitHub => self.get_github_changelog(input).await,
+            ForgeType::GitLab => self.get_gitlab_changelog(input).await,
+            ForgeType::SourceHut => self.get_sourcehut_changelog(input).await,
+            _ => self.get_git_changelog(input).await,
+        }
+    }
+
+    /// Get changelog via GitHub API
+    async fn get_github_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
+        let branch = input.reference.as_deref().unwrap_or("HEAD");
+        
+        // Get commits from branch
+        let url = format!(
+            "https://api.github.com/repos/{}/{}/commits?sha={}&per_page=100",
+            input.owner, input.repo, branch
+        );
+
+        let resp = self.client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return self.get_git_changelog(input).await;
+        }
+
+        #[derive(Deserialize)]
+        struct GitHubAuthor {
+            name: Option<String>,
+            date: Option<String>,
+        }
+
+        #[derive(Deserialize)]
+        struct GitHubCommitData {
+            message: String,
+            author: Option<GitHubAuthor>,
+        }
+
+        #[derive(Deserialize)]
+        struct GitHubCommit {
+            sha: String,
+            commit: GitHubCommitData,
+        }
+
+        let commits: Vec<GitHubCommit> = resp
+            .json()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        let mut result_commits = Vec::new();
+        let mut locked_idx = None;
+
+        for (idx, c) in commits.iter().enumerate() {
+            let is_locked = c.sha.starts_with(&input.rev) || c.sha == input.rev;
+            if is_locked {
+                locked_idx = Some(idx);
             }
 
-            let repo = ensure_repo(&cache_path, &clone_url, reference.as_deref())?;
-            
-            // Get commits ahead of locked rev
-            let commits_ahead = get_commits_since(&repo, &rev, reference.as_deref())?;
-            
-            // Get commits from locked rev going back
-            let commits_from_locked = get_commits_from(&repo, &rev, 50)?;
+            let date = c.commit.author
+                .as_ref()
+                .and_then(|a| a.date.as_ref())
+                .and_then(|d| chrono::DateTime::parse_from_rfc3339(d).ok())
+                .map(|d| d.with_timezone(&Utc))
+                .unwrap_or_else(Utc::now);
 
-            // Combine: ahead commits + locked + older commits
-            let mut all_commits = commits_ahead;
-            let locked_idx = if !commits_from_locked.is_empty() {
-                let idx = all_commits.len();
-                // Mark first commit as locked
-                let mut locked_commits = commits_from_locked;
-                if let Some(first) = locked_commits.first_mut() {
-                    first.is_locked = true;
-                }
-                all_commits.extend(locked_commits);
-                Some(idx)
-            } else {
-                None
-            };
+            let author = c.commit.author
+                .as_ref()
+                .and_then(|a| a.name.clone())
+                .unwrap_or_else(|| "Unknown".to_string());
 
-            Ok(ChangelogData {
-                commits: all_commits,
-                locked_idx,
-            })
+            let message = c.commit.message.lines().next().unwrap_or("").to_string();
+
+            result_commits.push(Commit {
+                sha: c.sha.clone(),
+                message,
+                author,
+                date,
+                is_locked,
+            });
+        }
+
+        Ok(ChangelogData {
+            commits: result_commits,
+            locked_idx,
         })
-        .await
-        .map_err(|e| GitError::CloneFailed(e.to_string()))?
+    }
+
+    /// Get changelog via GitLab API
+    async fn get_gitlab_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
+        let host = input.host.as_deref().unwrap_or("gitlab.com");
+        let branch = input.reference.as_deref().unwrap_or("HEAD");
+        
+        let project = format!("{}/{}", input.owner, input.repo);
+        let encoded_project = urlencoding(&project);
+        
+        let url = format!(
+            "https://{}/api/v4/projects/{}/repository/commits?ref_name={}&per_page=100",
+            host, encoded_project, branch
+        );
+
+        let resp = self.client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return self.get_git_changelog(input).await;
+        }
+
+        #[derive(Deserialize)]
+        struct GitLabCommit {
+            id: String,
+            title: String,
+            author_name: String,
+            created_at: String,
+        }
+
+        let commits: Vec<GitLabCommit> = resp
+            .json()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        let mut result_commits = Vec::new();
+        let mut locked_idx = None;
+
+        for (idx, c) in commits.iter().enumerate() {
+            let is_locked = c.id.starts_with(&input.rev) || c.id == input.rev;
+            if is_locked {
+                locked_idx = Some(idx);
+            }
+
+            let date = chrono::DateTime::parse_from_rfc3339(&c.created_at)
+                .map(|d| d.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now());
+
+            result_commits.push(Commit {
+                sha: c.id.clone(),
+                message: c.title.clone(),
+                author: c.author_name.clone(),
+                date,
+                is_locked,
+            });
+        }
+
+        Ok(ChangelogData {
+            commits: result_commits,
+            locked_idx,
+        })
+    }
+
+    /// Get changelog via SourceHut API
+    async fn get_sourcehut_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
+        let host = input.host.as_deref().unwrap_or("git.sr.ht");
+        let owner = if input.owner.starts_with('~') {
+            input.owner.clone()
+        } else {
+            format!("~{}", input.owner)
+        };
+        let branch = input.reference.as_deref().unwrap_or("HEAD");
+
+        let url = format!(
+            "https://{}/api/{}/{}/log/{}",
+            host, owner, input.repo, branch
+        );
+
+        let resp = self.client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return self.get_git_changelog(input).await;
+        }
+
+        #[derive(Deserialize)]
+        struct SrhtAuthor {
+            name: String,
+        }
+
+        #[derive(Deserialize)]
+        struct SrhtCommit {
+            id: String,
+            message: String,
+            author: SrhtAuthor,
+            timestamp: String,
+        }
+
+        #[derive(Deserialize)]
+        struct LogResponse {
+            results: Vec<SrhtCommit>,
+        }
+
+        let data: LogResponse = resp
+            .json()
+            .await
+            .map_err(|e| GitError::NetworkError(e.to_string()))?;
+
+        let mut result_commits = Vec::new();
+        let mut locked_idx = None;
+
+        for (idx, c) in data.results.iter().enumerate() {
+            let is_locked = c.id.starts_with(&input.rev) || c.id == input.rev;
+            if is_locked {
+                locked_idx = Some(idx);
+            }
+
+            let date = chrono::DateTime::parse_from_rfc3339(&c.timestamp)
+                .map(|d| d.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now());
+
+            let message = c.message.lines().next().unwrap_or("").to_string();
+
+            result_commits.push(Commit {
+                sha: c.id.clone(),
+                message,
+                author: c.author.name.clone(),
+                date,
+                is_locked,
+            });
+        }
+
+        Ok(ChangelogData {
+            commits: result_commits,
+            locked_idx,
+        })
+    }
+
+    /// Get changelog via git2 (fallback)
+    async fn get_git_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
+        let clone_url = get_clone_url(input);
+        let cache_path = self.cache_path(&clone_url);
+        let reference = input.reference.clone();
+        let rev = input.rev.clone();
+        let cancel = self.cancel_token.clone();
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(120),
+            tokio::task::spawn_blocking(move || {
+                if cancel.is_cancelled() {
+                    return Err(GitError::CloneFailed("Cancelled".to_string()));
+                }
+
+                let repo = ensure_repo(&cache_path, &clone_url, reference.as_deref())?;
+                
+                let commits_ahead = get_commits_since(&repo, &rev, reference.as_deref())?;
+                let commits_from_locked = get_commits_from(&repo, &rev, 50)?;
+
+                let mut all_commits = commits_ahead;
+                let locked_idx = if !commits_from_locked.is_empty() {
+                    let idx = all_commits.len();
+                    let mut locked_commits = commits_from_locked;
+                    if let Some(first) = locked_commits.first_mut() {
+                        first.is_locked = true;
+                    }
+                    all_commits.extend(locked_commits);
+                    Some(idx)
+                } else {
+                    None
+                };
+
+                Ok(ChangelogData {
+                    commits: all_commits,
+                    locked_idx,
+                })
+            }),
+        )
+        .await;
+
+        match result {
+            Ok(Ok(Ok(data))) => Ok(data),
+            Ok(Ok(Err(e))) => Err(e),
+            Ok(Err(e)) => Err(GitError::CloneFailed(format!("Task failed: {}", e))),
+            Err(_) => Err(GitError::NetworkError("Timeout loading changelog".to_string())),
+        }
     }
 
     /// Get the cache path for a URL
@@ -157,7 +549,6 @@ impl GitService {
         url.hash(&mut hasher);
         let hash = hasher.finish();
 
-        // Create a safe filename from the URL
         let safe_name: String = url
             .chars()
             .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
@@ -166,6 +557,11 @@ impl GitService {
 
         self.cache_dir.join(format!("{}_{:x}", safe_name, hash))
     }
+}
+
+/// Simple URL encoding for project paths
+fn urlencoding(s: &str) -> String {
+    s.replace('/', "%2F")
 }
 
 /// Get the XDG cache directory for melt
@@ -187,7 +583,6 @@ fn create_fetch_options<'a>() -> FetchOptions<'a> {
     
     callbacks.credentials(|_url, username_from_url, allowed_types| {
         if allowed_types.contains(git2::CredentialType::SSH_KEY) {
-            // Try SSH agent first
             let username = username_from_url.unwrap_or("git");
             Cred::ssh_key_from_agent(username)
         } else if allowed_types.contains(git2::CredentialType::DEFAULT) {
@@ -202,20 +597,17 @@ fn create_fetch_options<'a>() -> FetchOptions<'a> {
     fetch_options
 }
 
-/// Ensure a bare repository exists in cache, cloning or fetching as needed
+/// Ensure a bare repository exists in cache
 fn ensure_repo(cache_path: &Path, url: &str, reference: Option<&str>) -> Result<Repository, GitError> {
-    // Create parent directory if needed
     if let Some(parent) = cache_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| GitError::CacheError(e.to_string()))?;
     }
 
     if cache_path.exists() {
-        // Open existing repo and fetch
         let repo = Repository::open_bare(cache_path)?;
         fetch_repo(&repo)?;
         Ok(repo)
     } else {
-        // Clone new bare repo
         clone_repo(cache_path, url, reference)
     }
 }
@@ -226,7 +618,6 @@ fn clone_repo(cache_path: &Path, url: &str, reference: Option<&str>) -> Result<R
     builder.bare(true);
     builder.fetch_options(create_fetch_options());
 
-    // If reference is specified, fetch only that branch
     if let Some(r) = reference {
         builder.branch(r);
     }
@@ -255,25 +646,19 @@ fn get_commits_since(
 ) -> Result<Vec<Commit>, GitError> {
     let head_ref = head_ref.unwrap_or("HEAD");
     
-    // Resolve the head reference
     let head_oid = resolve_ref(repo, head_ref)?;
     
-    // Try to resolve the base revision
     let base_oid = match repo.revparse_single(base_rev) {
         Ok(obj) => obj.id(),
-        Err(_) => return Ok(Vec::new()), // Base not found, return empty
+        Err(_) => return Ok(Vec::new()),
     };
 
-    // If they're the same, no commits to return
     if head_oid == base_oid {
         return Ok(Vec::new());
     }
 
-    // Walk commits from head
     let mut revwalk = repo.revwalk()?;
     revwalk.push(head_oid)?;
-    
-    // Hide everything reachable from base
     let _ = revwalk.hide(base_oid);
 
     let mut commits = Vec::new();
@@ -310,21 +695,18 @@ fn get_commits_from(repo: &Repository, rev: &str, limit: usize) -> Result<Vec<Co
 
 /// Resolve a reference to an OID
 fn resolve_ref(repo: &Repository, refname: &str) -> Result<git2::Oid, GitError> {
-    // Try as a remote ref first (origin/<branch>)
     if let Ok(reference) = repo.find_reference(&format!("refs/remotes/origin/{}", refname)) {
         if let Some(oid) = reference.target() {
             return Ok(oid);
         }
     }
 
-    // Try as a local ref
     if let Ok(reference) = repo.find_reference(&format!("refs/heads/{}", refname)) {
         if let Some(oid) = reference.target() {
             return Ok(oid);
         }
     }
 
-    // Try as HEAD
     if refname == "HEAD" {
         if let Ok(head) = repo.head() {
             if let Some(oid) = head.target() {
@@ -333,7 +715,6 @@ fn resolve_ref(repo: &Repository, refname: &str) -> Result<git2::Oid, GitError> 
         }
     }
 
-    // Try as a direct revision
     if let Ok(obj) = repo.revparse_single(refname) {
         return Ok(obj.id());
     }
@@ -399,5 +780,11 @@ mod tests {
             get_clone_url(&input),
             "https://github.com/NixOS/nixpkgs.git"
         );
+    }
+
+    #[test]
+    fn test_urlencoding() {
+        assert_eq!(urlencoding("owner/repo"), "owner%2Frepo");
+        assert_eq!(urlencoding("simple"), "simple");
     }
 }

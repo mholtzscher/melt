@@ -30,8 +30,8 @@ impl NixService {
         }
 
         let output = self.run_nix_metadata(&flake_path).await?;
-        let metadata: NixFlakeMetadata =
-            serde_json::from_str(&output).map_err(|e| AppError::MetadataParseError(e.to_string()))?;
+        let metadata: NixFlakeMetadata = serde_json::from_str(&output)
+            .map_err(|e| AppError::MetadataParseError(e.to_string()))?;
 
         Ok(parse_metadata(flake_path, metadata))
     }
@@ -100,19 +100,16 @@ impl NixService {
     /// Run a nix command and return stdout
     async fn run_nix_command(&self, args: &[&str]) -> AppResult<String> {
         if self.cancel_token.is_cancelled() {
-            return Err(AppError::NixCommandFailed("Operation cancelled".to_string()));
+            return Err(AppError::NixCommandFailed(
+                "Operation cancelled".to_string(),
+            ));
         }
 
         let mut cmd = Command::new("nix");
-        cmd.args(args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
 
         // Add timeout of 30 seconds
-        let timeout = tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            cmd.output()
-        );
+        let timeout = tokio::time::timeout(std::time::Duration::from_secs(30), cmd.output());
 
         let output = tokio::select! {
             result = timeout => {
@@ -236,9 +233,7 @@ fn parse_metadata(path: PathBuf, metadata: NixFlakeMetadata) -> FlakeData {
                     // Get the node name - could be a string or array
                     let node_name = match value {
                         serde_json::Value::String(s) => s.clone(),
-                        serde_json::Value::Array(arr) => {
-                            arr.first()?.as_str()?.to_string()
-                        }
+                        serde_json::Value::Array(arr) => arr.first()?.as_str()?.to_string(),
                         _ => return None,
                     };
 
@@ -423,7 +418,13 @@ mod tests {
             host: None,
         };
 
-        assert_eq!(detect_forge_type("github", &locked, None), ForgeType::GitHub);
-        assert_eq!(detect_forge_type("gitlab", &locked, None), ForgeType::GitLab);
+        assert_eq!(
+            detect_forge_type("github", &locked, None),
+            ForgeType::GitHub
+        );
+        assert_eq!(
+            detect_forge_type("gitlab", &locked, None),
+            ForgeType::GitLab
+        );
     }
 }

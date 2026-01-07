@@ -59,7 +59,9 @@ impl From<git2::Error> for GitError {
         match e.code() {
             git2::ErrorCode::NotFound => GitError::NotFound,
             git2::ErrorCode::Auth => GitError::AuthFailed,
-            git2::ErrorCode::GenericError if e.message().contains("not found") => GitError::NotFound,
+            git2::ErrorCode::GenericError if e.message().contains("not found") => {
+                GitError::NotFound
+            }
             git2::ErrorCode::GenericError if e.message().contains("resolve") => {
                 GitError::NetworkError(e.message().to_string())
             }

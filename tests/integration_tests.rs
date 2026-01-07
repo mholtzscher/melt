@@ -265,7 +265,7 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
 fn parse_lock_file(content: &str) -> Vec<FlakeInput> {
     // Parse as a lock file directly (not metadata wrapper)
     let locks: NixLocks = serde_json::from_str(content).unwrap_or_default();
-    
+
     let root_node = locks.nodes.get(&locks.root);
     root_node
         .and_then(|n| n.inputs.as_ref())
@@ -275,9 +275,7 @@ fn parse_lock_file(content: &str) -> Vec<FlakeInput> {
                 .filter_map(|(name, value)| {
                     let node_name = match value {
                         serde_json::Value::String(s) => s.clone(),
-                        serde_json::Value::Array(arr) => {
-                            arr.first()?.as_str()?.to_string()
-                        }
+                        serde_json::Value::Array(arr) => arr.first()?.as_str()?.to_string(),
                         _ => return None,
                     };
 
@@ -301,16 +299,17 @@ fn get_test_data_path() -> PathBuf {
 #[test]
 fn test_parse_minimal_flake() {
     let lock_path = get_test_data_path().join("minimal").join("flake.lock");
-    let content = std::fs::read_to_string(&lock_path)
-        .expect("Failed to read minimal flake.lock");
-    
+    let content = std::fs::read_to_string(&lock_path).expect("Failed to read minimal flake.lock");
+
     let inputs = parse_lock_file(&content);
-    
+
     assert_eq!(inputs.len(), 1, "Minimal flake should have 1 input");
-    
-    let nixpkgs = inputs.iter().find(|i| i.name() == "nixpkgs")
+
+    let nixpkgs = inputs
+        .iter()
+        .find(|i| i.name() == "nixpkgs")
         .expect("Should have nixpkgs input");
-    
+
     match nixpkgs {
         FlakeInput::Git(g) => {
             assert_eq!(g.owner.to_lowercase(), "nixos");
@@ -325,35 +324,39 @@ fn test_parse_minimal_flake() {
 #[test]
 fn test_parse_all_forges_flake() {
     let lock_path = get_test_data_path().join("all-forges").join("flake.lock");
-    let content = std::fs::read_to_string(&lock_path)
-        .expect("Failed to read all-forges flake.lock");
-    
+    let content =
+        std::fs::read_to_string(&lock_path).expect("Failed to read all-forges flake.lock");
+
     let inputs = parse_lock_file(&content);
-    
+
     // Should have multiple inputs
-    assert!(inputs.len() >= 4, "all-forges should have at least 4 inputs, got {}", inputs.len());
-    
+    assert!(
+        inputs.len() >= 4,
+        "all-forges should have at least 4 inputs, got {}",
+        inputs.len()
+    );
+
     // Check GitHub input
     let nixpkgs = inputs.iter().find(|i| i.name() == "nixpkgs");
     assert!(nixpkgs.is_some(), "Should have nixpkgs input");
     if let Some(FlakeInput::Git(g)) = nixpkgs {
         assert_eq!(g.forge_type, ForgeType::GitHub);
     }
-    
+
     // Check GitLab input
     let gitlab = inputs.iter().find(|i| i.name() == "gitlab-example");
     assert!(gitlab.is_some(), "Should have gitlab-example input");
     if let Some(FlakeInput::Git(g)) = gitlab {
         assert_eq!(g.forge_type, ForgeType::GitLab);
     }
-    
-    // Check SourceHut input  
+
+    // Check SourceHut input
     let sourcehut = inputs.iter().find(|i| i.name() == "sourcehut-example");
     assert!(sourcehut.is_some(), "Should have sourcehut-example input");
     if let Some(FlakeInput::Git(g)) = sourcehut {
         assert_eq!(g.forge_type, ForgeType::SourceHut);
     }
-    
+
     // Check path input
     let local = inputs.iter().find(|i| i.name() == "local-example");
     assert!(local.is_some(), "Should have local-example input");
@@ -377,41 +380,49 @@ fn test_forge_type_detection_from_url() {
         path: None,
         host: None,
     };
-    
+
     assert_eq!(detect_forge_type("git", &locked, None), ForgeType::Codeberg);
-    
+
     let locked_github = NixLocked {
         type_: Some("git".to_string()),
         url: Some("https://github.com/owner/repo".to_string()),
         ..Default::default()
     };
-    
-    assert_eq!(detect_forge_type("git", &locked_github, None), ForgeType::GitHub);
-    
+
+    assert_eq!(
+        detect_forge_type("git", &locked_github, None),
+        ForgeType::GitHub
+    );
+
     let locked_generic = NixLocked {
         type_: Some("git".to_string()),
         url: Some("https://custom-host.example.com/repo".to_string()),
         ..Default::default()
     };
-    
-    assert_eq!(detect_forge_type("git", &locked_generic, None), ForgeType::Generic);
+
+    assert_eq!(
+        detect_forge_type("git", &locked_generic, None),
+        ForgeType::Generic
+    );
 }
 
 #[test]
 fn test_github_heavy_flake() {
     let lock_path = get_test_data_path().join("github-heavy").join("flake.lock");
-    let content = std::fs::read_to_string(&lock_path)
-        .expect("Failed to read github-heavy flake.lock");
-    
+    let content =
+        std::fs::read_to_string(&lock_path).expect("Failed to read github-heavy flake.lock");
+
     let inputs = parse_lock_file(&content);
-    
+
     // All inputs should be GitHub
     for input in &inputs {
         if let FlakeInput::Git(g) = input {
             assert_eq!(
-                g.forge_type, ForgeType::GitHub,
+                g.forge_type,
+                ForgeType::GitHub,
                 "Input {} should be GitHub, not {:?}",
-                g.name, g.forge_type
+                g.name,
+                g.forge_type
             );
         }
     }
@@ -420,17 +431,17 @@ fn test_github_heavy_flake() {
 #[test]
 fn test_nixos_config_flake() {
     let lock_path = get_test_data_path().join("nixos-config").join("flake.lock");
-    
+
     // This test is optional - skip if fixture doesn't exist
     if !lock_path.exists() {
         return;
     }
-    
-    let content = std::fs::read_to_string(&lock_path)
-        .expect("Failed to read nixos-config flake.lock");
-    
+
+    let content =
+        std::fs::read_to_string(&lock_path).expect("Failed to read nixos-config flake.lock");
+
     let inputs = parse_lock_file(&content);
-    
+
     // Should parse without errors
     assert!(!inputs.is_empty(), "nixos-config should have inputs");
 }
@@ -447,7 +458,7 @@ fn test_empty_inputs_handling() {
         "root": "root",
         "version": 7
     }"#;
-    
+
     let inputs = parse_lock_file(empty_lock);
     assert!(inputs.is_empty(), "Empty lock should have no inputs");
 }
@@ -481,10 +492,10 @@ fn test_missing_locked_fields() {
         "root": "root",
         "version": 7
     }"#;
-    
+
     let inputs = parse_lock_file(lock_json);
     assert_eq!(inputs.len(), 1);
-    
+
     if let Some(FlakeInput::Git(g)) = inputs.first() {
         // Missing fields should be empty strings
         assert!(g.rev.is_empty());
@@ -541,10 +552,10 @@ fn test_indirect_input_reference() {
         "root": "root",
         "version": 7
     }"#;
-    
+
     let inputs = parse_lock_file(lock_json);
     assert_eq!(inputs.len(), 3, "Should have 3 inputs");
-    
+
     // Verify all three are parsed
     let names: Vec<&str> = inputs.iter().map(|i| i.name()).collect();
     assert!(names.contains(&"flake-utils"));
@@ -555,23 +566,30 @@ fn test_indirect_input_reference() {
 #[test]
 fn test_url_building() {
     let locked = NixLocked::default();
-    
+
     // GitHub URL
     let url = build_url("github", "NixOS", "nixpkgs", None, &locked, None);
     assert_eq!(url, "github:NixOS/nixpkgs");
-    
-    // GitLab URL  
+
+    // GitLab URL
     let url = build_url("gitlab", "owner", "repo", None, &locked, None);
     assert_eq!(url, "gitlab:owner/repo");
-    
+
     // GitLab with custom host
-    let url = build_url("gitlab", "owner", "repo", Some("gitlab.gnome.org"), &locked, None);
+    let url = build_url(
+        "gitlab",
+        "owner",
+        "repo",
+        Some("gitlab.gnome.org"),
+        &locked,
+        None,
+    );
     assert_eq!(url, "gitlab:owner/repo (gitlab.gnome.org)");
-    
+
     // SourceHut URL (without tilde)
     let url = build_url("sourcehut", "user", "repo", None, &locked, None);
     assert_eq!(url, "sourcehut:~user/repo");
-    
+
     // SourceHut URL (with tilde)
     let url = build_url("sourcehut", "~user", "repo", None, &locked, None);
     assert_eq!(url, "sourcehut:~user/repo");
@@ -590,14 +608,14 @@ fn test_input_name_extraction() {
         last_modified: 1234567890,
         url: "github:NixOS/nixpkgs".to_string(),
     });
-    
+
     assert_eq!(git_input.name(), "nixpkgs");
-    
+
     let path_input = FlakeInput::Path(PathInput {
         name: "local".to_string(),
         path: "./local".to_string(),
     });
-    
+
     assert_eq!(path_input.name(), "local");
 }
 
@@ -630,10 +648,10 @@ fn test_reference_parsing() {
         "root": "root",
         "version": 7
     }"#;
-    
+
     let inputs = parse_lock_file(lock_json);
     assert_eq!(inputs.len(), 1);
-    
+
     if let Some(FlakeInput::Git(g)) = inputs.first() {
         assert_eq!(g.reference, Some("nixos-unstable".to_string()));
         assert_eq!(g.rev, "abc1234def5678");

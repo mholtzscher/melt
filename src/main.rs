@@ -11,7 +11,9 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use crate::{app::App, error::AppResult, tui::Tui};
+use app::App;
+use error::AppResult;
+use tui::Tui;
 
 /// A TUI for managing Nix flake inputs
 #[derive(Parser, Debug)]

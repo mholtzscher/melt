@@ -8,6 +8,8 @@ pub enum UpdateStatus {
     Unknown,
     /// Currently checking for updates
     Checking,
+    /// Currently being updated
+    Updating,
     /// Input is up to date with remote
     UpToDate,
     /// Input is behind remote by N commits
@@ -22,6 +24,7 @@ impl UpdateStatus {
         match self {
             UpdateStatus::Unknown => "-".to_string(),
             UpdateStatus::Checking => "...".to_string(),
+            UpdateStatus::Updating => "...".to_string(),
             UpdateStatus::UpToDate => "ok".to_string(),
             UpdateStatus::Behind(n) => format!("+{}", n),
             UpdateStatus::Error(_) => "?".to_string(),

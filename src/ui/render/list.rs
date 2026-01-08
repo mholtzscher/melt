@@ -63,13 +63,16 @@ fn render_input_table(frame: &mut Frame, list: &mut ListState, area: Rect, tick_
                 .unwrap_or_default();
 
             let status_display = match &status {
-                UpdateStatus::Checking => get_spinner_frame(tick_count).to_string(),
+                UpdateStatus::Checking | UpdateStatus::Updating => {
+                    get_spinner_frame(tick_count).to_string()
+                }
                 _ => status.display(),
             };
 
             let status_color = match &status {
                 UpdateStatus::Unknown => theme::TEXT_DIM,
                 UpdateStatus::Checking => theme::TEXT_DIM,
+                UpdateStatus::Updating => theme::INFO,
                 UpdateStatus::UpToDate => theme::TEXT_DIM,
                 UpdateStatus::Behind(_) => theme::SUCCESS,
                 UpdateStatus::Error(_) => theme::WARNING,

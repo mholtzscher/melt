@@ -27,6 +27,7 @@
           extensions = [
             "rust-src"
             "rust-analyzer"
+            "clippy"
           ];
         };
 
@@ -42,8 +43,7 @@
             libgit2
           ]
           ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-            pkgs.darwin.apple_sdk.frameworks.Security
-            pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
+            pkgs.darwin.libiconv
           ];
 
       in

@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use tracing::{debug, warn};
 
 use crate::error::AppResult;
 use crate::event::poll_key;
@@ -47,7 +48,6 @@ pub struct App {
 }
 
 impl App {
-    /// Create a new application instance
     pub fn new(flake_path: PathBuf) -> Self {
         let cancel_token = CancellationToken::new();
         let (task_tx, task_rx) = mpsc::unbounded_channel();
@@ -64,34 +64,26 @@ impl App {
         }
     }
 
-    /// Run the application main loop
     pub async fn run(&mut self, tui: &mut Tui) -> AppResult<()> {
-        // Start loading flake in background
         self.spawn_load_flake();
 
         loop {
-            // Check for quit state
             if matches!(self.state, AppState::Quitting) {
                 break;
             }
 
-            // Draw the UI
             tui.draw(|frame| self.render(frame))?;
 
-            // Poll for key events (non-blocking with short timeout)
             if let Some(key) = poll_key(Duration::from_millis(16)) {
                 self.handle_key(key).await;
             }
 
-            // Check for background task results (non-blocking)
             while let Ok(result) = self.task_rx.try_recv() {
                 self.handle_task_result(result);
             }
 
-            // Increment tick for animations
             self.tick_count = self.tick_count.wrapping_add(1);
 
-            // Clear expired status messages
             if let Some(ref msg) = self.status_message {
                 if msg.is_expired() {
                     self.status_message = None;
@@ -130,7 +122,6 @@ impl App {
         self.execute_action(action).await;
     }
 
-    /// Execute an action returned from input handling
     async fn execute_action(&mut self, action: Action) {
         match action {
             Action::None => {}
@@ -142,16 +133,17 @@ impl App {
                 self.state = AppState::Quitting;
             }
             Action::UpdateSelected(names) => {
-                let count = names.len();
+                debug!(inputs = ?names, "Updating selected inputs");
                 self.status_message = Some(StatusMessage::info(format!(
                     "Updating {} input(s)...",
-                    count
+                    names.len()
                 )));
                 if let AppState::List(list) = &self.state {
                     self.spawn_update(list.flake.path.clone(), names);
                 }
             }
             Action::UpdateAll => {
+                debug!("Updating all inputs");
                 self.status_message = Some(StatusMessage::info("Updating all inputs..."));
                 if let AppState::List(list) = &self.state {
                     self.spawn_update_all(list.flake.path.clone());
@@ -180,6 +172,7 @@ impl App {
                 input_name,
                 lock_url,
             } => {
+                debug!(input = %input_name, "Locking to commit");
                 if let AppState::Changelog(cs) = &self.state {
                     let commit_idx = cs.confirm_lock.unwrap_or(0);
                     if let Some(commit) = cs.data.commits.get(commit_idx) {
@@ -198,36 +191,31 @@ impl App {
         }
     }
 
-    /// Handle a result from a background task
     fn handle_task_result(&mut self, result: TaskResult) {
         match result {
             TaskResult::FlakeLoaded(Ok(flake)) => {
                 let inputs = flake.inputs.clone();
-
-                // Check if we're refreshing (already in List state) or initial load
                 if let AppState::List(list) = &mut self.state {
                     list.update_flake(flake);
                 } else {
                     self.state = AppState::List(ListState::new(flake));
                 }
-
-                // Clear any status message
                 self.status_message = None;
-                // Start checking for updates in background
                 self.spawn_check_updates(inputs);
             }
             TaskResult::FlakeLoaded(Err(e)) => {
+                warn!(error = %e, "Failed to load flake");
                 self.state = AppState::Error(format!("Failed to load flake: {}", e));
             }
             TaskResult::UpdateComplete(Ok(())) => {
                 self.status_message = Some(StatusMessage::success("Update complete"));
-                // Clear selection and reload
                 if let AppState::List(list) = &mut self.state {
                     list.clear_selection();
                 }
                 self.spawn_load_flake();
             }
             TaskResult::UpdateComplete(Err(e)) => {
+                warn!(error = %e, "Update failed");
                 self.status_message = Some(StatusMessage::error(format!("Update failed: {}", e)));
                 if let AppState::List(list) = &mut self.state {
                     list.busy = false;
@@ -242,11 +230,11 @@ impl App {
                 self.status_message = None;
             }
             TaskResult::ChangelogLoaded(Err(e)) => {
+                warn!(error = %e, "Failed to load changelog");
                 self.status_message = Some(StatusMessage::error(format!(
                     "Failed to load changelog: {}",
                     e
                 )));
-                // Return to list from loading changelog state
                 if let AppState::LoadingChangelog(list) =
                     std::mem::replace(&mut self.state, AppState::Loading)
                 {
@@ -255,7 +243,6 @@ impl App {
             }
             TaskResult::LockComplete(Ok(())) => {
                 self.status_message = Some(StatusMessage::success("Locked successfully"));
-                // Return to list and reload
                 if let AppState::Changelog(cs) =
                     std::mem::replace(&mut self.state, AppState::Loading)
                 {
@@ -266,6 +253,7 @@ impl App {
                 self.spawn_load_flake();
             }
             TaskResult::LockComplete(Err(e)) => {
+                warn!(error = %e, "Lock failed");
                 self.status_message = Some(StatusMessage::error(format!("Lock failed: {}", e)));
                 if let AppState::Changelog(cs) = &mut self.state {
                     cs.hide_confirm();
@@ -279,7 +267,6 @@ impl App {
         }
     }
 
-    /// Spawn a background task to load flake metadata
     fn spawn_load_flake(&self) {
         let nix = self.nix.clone();
         let path = self.flake_path.clone();
@@ -291,7 +278,6 @@ impl App {
         });
     }
 
-    /// Spawn a background task to update inputs
     fn spawn_update(&self, path: PathBuf, names: Vec<String>) {
         let nix = self.nix.clone();
         let tx = self.task_tx.clone();
@@ -302,7 +288,6 @@ impl App {
         });
     }
 
-    /// Spawn a background task to update all inputs
     fn spawn_update_all(&self, path: PathBuf) {
         let nix = self.nix.clone();
         let tx = self.task_tx.clone();
@@ -313,7 +298,6 @@ impl App {
         });
     }
 
-    /// Spawn a background task to load changelog
     fn spawn_load_changelog(&self, input: GitInput, parent_list: ListState) {
         let git = self.git.clone();
         let tx = self.task_tx.clone();
@@ -330,7 +314,6 @@ impl App {
         });
     }
 
-    /// Spawn a background task to lock an input
     fn spawn_lock(&self, path: PathBuf, name: String, lock_url: String) {
         let nix = self.nix.clone();
         let tx = self.task_tx.clone();
@@ -341,7 +324,6 @@ impl App {
         });
     }
 
-    /// Spawn background tasks to check for updates on all inputs
     fn spawn_check_updates(&self, inputs: Vec<FlakeInput>) {
         let git = self.git.clone();
         let tx = self.task_tx.clone();

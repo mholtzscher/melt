@@ -3,6 +3,7 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use serde::Deserialize;
+use tracing::{debug, warn};
 
 use crate::config::ServiceConfig;
 use tokio::process::Command;
@@ -31,11 +32,9 @@ impl NixService {
         }
     }
 
-    /// Load flake metadata from the given path
     pub async fn load_metadata(&self, path: &Path) -> AppResult<FlakeData> {
         let flake_path = resolve_flake_path(path)?;
 
-        // Check if flake.nix exists
         if !flake_path.join("flake.nix").exists() {
             return Err(AppError::FlakeNotFound(flake_path));
         }
@@ -47,11 +46,12 @@ impl NixService {
         Ok(parse_metadata(flake_path, metadata))
     }
 
-    /// Update specific inputs
     pub async fn update_inputs(&self, path: &Path, names: &[String]) -> AppResult<()> {
         if names.is_empty() {
             return Ok(());
         }
+
+        debug!(inputs = ?names, "Updating inputs");
 
         let mut args = vec!["flake", "update"];
         for name in names {
@@ -65,16 +65,16 @@ impl NixService {
         Ok(())
     }
 
-    /// Update all inputs
     pub async fn update_all(&self, path: &Path) -> AppResult<()> {
+        debug!("Updating all inputs");
         let path_str = path.to_string_lossy();
         self.run_nix_command(&["flake", "update", "--flake", &path_str])
             .await?;
         Ok(())
     }
 
-    /// Lock an input to a specific revision
     pub async fn lock_input(&self, path: &Path, name: &str, override_url: &str) -> AppResult<()> {
+        debug!(input = %name, "Locking input");
         let path_str = path.to_string_lossy();
         self.run_nix_command(&[
             "flake",
@@ -103,7 +103,6 @@ impl NixService {
         .await
     }
 
-    /// Run a nix command and return stdout
     async fn run_nix_command(&self, args: &[&str]) -> AppResult<String> {
         if self.cancel_token.is_cancelled() {
             return Err(AppError::NixCommandFailed(
@@ -131,6 +130,7 @@ impl NixService {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            warn!(args = ?args, "Nix command failed");
             return Err(AppError::NixCommandFailed(stderr.trim().to_string()));
         }
 
@@ -138,7 +138,6 @@ impl NixService {
     }
 }
 
-/// Resolve flake path - if it ends with flake.nix, get the parent directory
 fn resolve_flake_path(path: &Path) -> AppResult<PathBuf> {
     let path = if path.to_string_lossy().is_empty() || path.to_string_lossy() == "." {
         std::env::current_dir()?
@@ -154,7 +153,6 @@ fn resolve_flake_path(path: &Path) -> AppResult<PathBuf> {
         path
     };
 
-    // Canonicalize to get absolute path
     resolved
         .canonicalize()
         .map_err(|_| AppError::FlakeNotFound(resolved))
@@ -229,7 +227,6 @@ struct NixOriginal {
     host: Option<String>,
 }
 
-/// Parse nix metadata into our FlakeData structure
 fn parse_metadata(path: PathBuf, metadata: NixFlakeMetadata) -> FlakeData {
     let root_node = metadata.locks.nodes.get(&metadata.locks.root);
     let mut inputs: Vec<FlakeInput> = root_node
@@ -238,7 +235,6 @@ fn parse_metadata(path: PathBuf, metadata: NixFlakeMetadata) -> FlakeData {
             inputs
                 .iter()
                 .filter_map(|(name, value)| {
-                    // Get the node name - could be a string or array
                     let node_name = match value {
                         serde_json::Value::String(s) => s.clone(),
                         serde_json::Value::Array(arr) => arr.first()?.as_str()?.to_string(),
@@ -252,7 +248,6 @@ fn parse_metadata(path: PathBuf, metadata: NixFlakeMetadata) -> FlakeData {
         })
         .unwrap_or_default();
 
-    // Sort inputs alphabetically by name
     inputs.sort_by(|a, b| a.name().to_lowercase().cmp(&b.name().to_lowercase()));
 
     FlakeData { path, inputs }

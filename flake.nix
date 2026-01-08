@@ -34,6 +34,7 @@
         nativeBuildInputs = with pkgs; [
           rustToolchain
           pkg-config
+          makeWrapper
         ];
 
         buildInputs =
@@ -59,6 +60,13 @@
           };
 
           inherit nativeBuildInputs buildInputs;
+
+          # Use system OpenSSL instead of building from source
+          OPENSSL_NO_VENDOR = 1;
+
+          # Skip tests in Nix build - run with `cargo test` in devShell instead
+          # (test fixtures use paths that don't resolve correctly in the sandbox)
+          doCheck = false;
 
           # Runtime dependencies
           postInstall = ''

@@ -248,7 +248,7 @@ fn parse_metadata(path: PathBuf, metadata: NixFlakeMetadata) -> FlakeData {
         })
         .unwrap_or_default();
 
-    inputs.sort_by(|a, b| a.name().to_lowercase().cmp(&b.name().to_lowercase()));
+    inputs.sort_by_key(|a| a.name().to_lowercase());
 
     FlakeData { path, inputs }
 }
@@ -256,10 +256,7 @@ fn parse_metadata(path: PathBuf, metadata: NixFlakeMetadata) -> FlakeData {
 /// Parse owner and repo from a git URL
 fn parse_owner_repo_from_url(url: &str) -> Option<(String, String)> {
     fn parse_owner_repo_from_path(path: &str) -> Option<(String, String)> {
-        let mut segments: Vec<&str> = path
-            .split(|c| c == '/' || c == '\\')
-            .filter(|s| !s.is_empty())
-            .collect();
+        let mut segments: Vec<&str> = path.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
 
         if segments.len() < 2 {
             return None;
@@ -295,7 +292,7 @@ fn parse_owner_repo_from_url(url: &str) -> Option<(String, String)> {
 
         // Drop authority (host / user@host:port)
         let path = rest.split_once('/')?.1;
-        let path = path.split(|c| c == '?' || c == '#').next().unwrap_or(path);
+        let path = path.split(['?', '#']).next().unwrap_or(path);
 
         return parse_owner_repo_from_path(path);
     }
@@ -303,7 +300,7 @@ fn parse_owner_repo_from_url(url: &str) -> Option<(String, String)> {
     // SCP-style: git@host:owner/repo.git
     if url.contains(':') && !url.contains("://") {
         let (_, path) = url.split_once(':')?;
-        let path = path.split(|c| c == '?' || c == '#').next().unwrap_or(path);
+        let path = path.split(['?', '#']).next().unwrap_or(path);
 
         return parse_owner_repo_from_path(path);
     }

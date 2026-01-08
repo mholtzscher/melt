@@ -20,7 +20,7 @@ pub enum AppState {
     /// Showing list of inputs
     List(ListState),
     /// Showing changelog for an input
-    Changelog(ChangelogState),
+    Changelog(Box<ChangelogState>),
     /// Loading changelog (keep parent list for display)
     LoadingChangelog(ListState),
     /// Quitting
@@ -235,7 +235,7 @@ pub enum TaskResult {
     /// Input update completed
     UpdateComplete(Result<(), AppError>),
     /// Changelog loaded
-    ChangelogLoaded(Result<ChangelogLoadedData, GitError>),
+    ChangelogLoaded(Box<Result<ChangelogLoadedData, GitError>>),
     /// Lock completed
     LockComplete(Result<(), AppError>),
     /// Status update for a single input

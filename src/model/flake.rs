@@ -128,19 +128,14 @@ impl ForgeType {
     pub fn lock_url(&self, owner: &str, repo: &str, rev: &str, host: Option<&str>) -> String {
         match self {
             ForgeType::GitHub => format!("github:{}/{}/{}", owner, repo, rev),
-            ForgeType::GitLab => {
-                if host.is_none() || host == Some("gitlab.com") {
+            ForgeType::GitLab => match host {
+                None | Some("gitlab.com") => {
                     format!("gitlab:{}/{}/{}", owner, repo, rev)
-                } else {
-                    format!(
-                        "git+https://{}/{}/{}?rev={}",
-                        host.unwrap(),
-                        owner,
-                        repo,
-                        rev
-                    )
                 }
-            }
+                Some(h) => {
+                    format!("git+https://{}/{}/{}?rev={}", h, owner, repo, rev)
+                }
+            },
             ForgeType::SourceHut => {
                 let o = if owner.starts_with('~') {
                     owner.to_string()

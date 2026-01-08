@@ -132,7 +132,7 @@ fn render_help_bar(
     area: Rect,
     tick_count: u64,
 ) {
-    let shortcuts = vec![
+    let shortcuts = [
         ("j/k", "nav"),
         ("space", "select"),
         ("u", "update"),

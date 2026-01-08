@@ -119,7 +119,7 @@ fn render_changelog_help_bar(
     status_message: Option<&StatusMessage>,
     area: Rect,
 ) {
-    let shortcuts = vec![("j/k", "nav"), ("space", "lock"), ("q/esc", "back")];
+    let shortcuts = [("j/k", "nav"), ("space", "lock"), ("q/esc", "back")];
 
     let mut spans: Vec<Span> = shortcuts
         .iter()

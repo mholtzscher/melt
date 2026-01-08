@@ -56,7 +56,7 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> Action {
         }
         StateKind::Changelog => {
             if let AppState::Changelog(cs) = state {
-                handle_changelog_key(cs, key)
+                handle_changelog_key(cs.as_mut(), key)
             } else {
                 Action::None
             }

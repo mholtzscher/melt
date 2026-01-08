@@ -110,7 +110,7 @@ impl App {
                 render::render_list(frame, list, self.status_message.as_ref(), self.tick_count);
             }
             AppState::Changelog(cs) => {
-                render::render_changelog(frame, cs, self.status_message.as_ref());
+                render::render_changelog(frame, cs.as_mut(), self.status_message.as_ref());
             }
             AppState::Quitting => {}
         }
@@ -221,26 +221,28 @@ impl App {
                     list.busy = false;
                 }
             }
-            TaskResult::ChangelogLoaded(Ok(data)) => {
-                self.state = AppState::Changelog(ChangelogState::new(
-                    data.input,
-                    data.data,
-                    data.parent_list,
-                ));
-                self.status_message = None;
-            }
-            TaskResult::ChangelogLoaded(Err(e)) => {
-                warn!(error = %e, "Failed to load changelog");
-                self.status_message = Some(StatusMessage::error(format!(
-                    "Failed to load changelog: {}",
-                    e
-                )));
-                if let AppState::LoadingChangelog(list) =
-                    std::mem::replace(&mut self.state, AppState::Loading)
-                {
-                    self.state = AppState::List(list);
+            TaskResult::ChangelogLoaded(result) => match *result {
+                Ok(data) => {
+                    self.state = AppState::Changelog(Box::new(ChangelogState::new(
+                        data.input,
+                        data.data,
+                        data.parent_list,
+                    )));
+                    self.status_message = None;
                 }
-            }
+                Err(e) => {
+                    warn!(error = %e, "Failed to load changelog");
+                    self.status_message = Some(StatusMessage::error(format!(
+                        "Failed to load changelog: {}",
+                        e
+                    )));
+                    if let AppState::LoadingChangelog(list) =
+                        std::mem::replace(&mut self.state, AppState::Loading)
+                    {
+                        self.state = AppState::List(list);
+                    }
+                }
+            },
             TaskResult::LockComplete(Ok(())) => {
                 self.status_message = Some(StatusMessage::success("Locked successfully"));
                 if let AppState::Changelog(cs) =
@@ -304,13 +306,13 @@ impl App {
 
         tokio::spawn(async move {
             let result = git.get_changelog(&input).await;
-            let _ = tx.send(TaskResult::ChangelogLoaded(result.map(|data| {
+            let _ = tx.send(TaskResult::ChangelogLoaded(Box::new(result.map(|data| {
                 ChangelogLoadedData {
                     input,
                     data,
                     parent_list,
                 }
-            })));
+            }))));
         });
     }
 

@@ -37,7 +37,6 @@ pub enum Action {
     ShowWarning(String),
 }
 
-/// Handle key events based on current state
 pub fn handle_key(state: &mut AppState, key: KeyEvent) -> Action {
     match state.kind() {
         StateKind::Loading | StateKind::LoadingChangelog => {

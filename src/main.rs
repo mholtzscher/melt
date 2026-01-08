@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod error;
 mod event;
+mod logging;
 mod model;
 mod service;
 mod tui;
@@ -28,6 +29,9 @@ struct Args {
 #[tokio::main]
 async fn main() -> ExitCode {
     tui::install_panic_hook();
+
+    // Initialize logging (ok to fail silently - app works without it)
+    let _ = logging::init();
 
     match run().await {
         Ok(()) => ExitCode::SUCCESS,

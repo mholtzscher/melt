@@ -36,6 +36,7 @@ pub mod app;
 pub mod config;
 pub mod error;
 pub mod event;
+pub mod logging;
 pub mod model;
 pub mod service;
 pub mod tui;

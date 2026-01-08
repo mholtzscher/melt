@@ -4,6 +4,7 @@ use std::sync::Arc;
 use chrono::{TimeZone, Utc};
 use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
 use reqwest::Client;
+use tracing::{debug, warn};
 
 use crate::config::ServiceConfig;
 use serde::Deserialize;
@@ -42,7 +43,6 @@ impl GitService {
             .build()
             .unwrap_or_default();
 
-        // Check for GitHub token (same env vars as gh CLI)
         let github_token = std::env::var("GITHUB_TOKEN")
             .or_else(|_| std::env::var("GH_TOKEN"))
             .ok();
@@ -66,7 +66,6 @@ impl GitService {
     where
         F: FnMut(&str, UpdateStatus) + Send,
     {
-        // Filter to only git inputs
         let git_inputs: Vec<&GitInput> = inputs
             .iter()
             .filter_map(|i| match i {
@@ -75,12 +74,16 @@ impl GitService {
             })
             .collect();
 
-        // Set all to checking
+        debug!(
+            total = inputs.len(),
+            git_inputs = git_inputs.len(),
+            "Checking for updates"
+        );
+
         for input in &git_inputs {
             on_status(&input.name, UpdateStatus::Checking);
         }
 
-        // Check each input
         for input in git_inputs {
             if self.cancel_token.is_cancelled() {
                 break;
@@ -92,14 +95,15 @@ impl GitService {
                 })?;
 
             let status = match self.check_input_updates(input).await {
+                Ok(0) => UpdateStatus::UpToDate,
                 Ok(count) => {
-                    if count == 0 {
-                        UpdateStatus::UpToDate
-                    } else {
-                        UpdateStatus::Behind(count)
-                    }
+                    debug!(input = %input.name, behind = count, "Updates available");
+                    UpdateStatus::Behind(count)
                 }
-                Err(e) => UpdateStatus::Error(e.to_string()),
+                Err(e) => {
+                    warn!(input = %input.name, error = %e, "Failed to check input");
+                    UpdateStatus::Error(e.to_string())
+                }
             };
 
             on_status(&input.name, status);
@@ -108,7 +112,6 @@ impl GitService {
         Ok(())
     }
 
-    /// Check for updates on a single input - uses API when possible
     async fn check_input_updates(&self, input: &GitInput) -> Result<usize, GitError> {
         match input.forge_type {
             ForgeType::GitHub => self.check_github_updates(input).await,
@@ -119,7 +122,6 @@ impl GitService {
         }
     }
 
-    /// Check updates via GitHub API
     async fn check_github_updates(&self, input: &GitInput) -> Result<usize, GitError> {
         let branch = input.reference.as_deref().unwrap_or("HEAD");
         let url = format!(
@@ -139,7 +141,6 @@ impl GitService {
 
         let status = resp.status();
 
-        // Check for rate limiting
         if status.as_u16() == 403 || status.as_u16() == 429 {
             let remaining = resp
                 .headers()
@@ -149,6 +150,7 @@ impl GitService {
                 .unwrap_or(0);
 
             if remaining == 0 {
+                warn!(input = %input.name, "GitHub API rate limit exceeded");
                 return Err(GitError::NetworkError(
                     "GitHub API rate limit exceeded. Set GITHUB_TOKEN for higher limits."
                         .to_string(),
@@ -156,7 +158,6 @@ impl GitService {
             }
         }
 
-        // For other errors (404 for private repos, etc.), fall back to git
         if !status.is_success() {
             return self.check_git_updates(input).await;
         }
@@ -174,12 +175,9 @@ impl GitService {
         Ok(data.ahead_by)
     }
 
-    /// Check updates via GitLab API
     async fn check_gitlab_updates(&self, input: &GitInput) -> Result<usize, GitError> {
         let host = input.host.as_deref().unwrap_or("gitlab.com");
         let branch = input.reference.as_deref().unwrap_or("HEAD");
-
-        // URL-encode the project path
         let project = format!("{}/{}", input.owner, input.repo);
         let encoded_project = urlencoding(&project);
 
@@ -212,7 +210,6 @@ impl GitService {
         Ok(data.commits.len())
     }
 
-    /// Check updates via SourceHut API
     async fn check_sourcehut_updates(&self, input: &GitInput) -> Result<usize, GitError> {
         let host = input.host.as_deref().unwrap_or("git.sr.ht");
         let owner = if input.owner.starts_with('~') {
@@ -222,7 +219,6 @@ impl GitService {
         };
         let branch = input.reference.as_deref().unwrap_or("HEAD");
 
-        // SourceHut API: get log from branch
         let url = format!(
             "https://{}/api/{}/{}/log/{}",
             host, owner, input.repo, branch
@@ -254,7 +250,6 @@ impl GitService {
             .await
             .map_err(|e| GitError::NetworkError(e.to_string()))?;
 
-        // Count commits until we find the locked rev
         let count = data
             .results
             .iter()
@@ -264,7 +259,6 @@ impl GitService {
         Ok(count)
     }
 
-    /// Check updates via git2 (fallback for non-API forges)
     async fn check_git_updates(&self, input: &GitInput) -> Result<usize, GitError> {
         let clone_url = get_clone_url(input);
         let cache_path = self.cache_path(&clone_url);
@@ -272,7 +266,8 @@ impl GitService {
         let rev = input.rev.clone();
         let cancel = self.cancel_token.clone();
 
-        // Run with timeout
+        debug!(input = %input.name, "Using git2 fallback");
+
         let result = tokio::time::timeout(
             self.timeouts.git_update_check,
             tokio::task::spawn_blocking(move || {
@@ -297,8 +292,9 @@ impl GitService {
         }
     }
 
-    /// Get changelog for an input - uses API when possible
     pub async fn get_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
+        debug!(input = %input.name, forge = ?input.forge_type, "Loading changelog");
+
         match input.forge_type {
             ForgeType::GitHub => self.get_github_changelog(input).await,
             ForgeType::GitLab => self.get_gitlab_changelog(input).await,
@@ -559,7 +555,6 @@ impl GitService {
         })
     }
 
-    /// Get changelog via git2 (fallback)
     async fn get_git_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
         let clone_url = get_clone_url(input);
         let cache_path = self.cache_path(&clone_url);
@@ -669,7 +664,6 @@ fn create_fetch_options<'a>() -> FetchOptions<'a> {
     fetch_options
 }
 
-/// Ensure a bare repository exists in cache
 fn ensure_repo(
     cache_path: &Path,
     url: &str,
@@ -688,12 +682,13 @@ fn ensure_repo(
     }
 }
 
-/// Clone a bare repository
 fn clone_repo(
     cache_path: &Path,
     url: &str,
     reference: Option<&str>,
 ) -> Result<Repository, GitError> {
+    debug!(url = %url, "Cloning repository");
+
     let mut builder = git2::build::RepoBuilder::new();
     builder.bare(true);
     builder.fetch_options(create_fetch_options());
@@ -705,7 +700,6 @@ fn clone_repo(
     builder.clone(url, cache_path).map_err(GitError::from)
 }
 
-/// Fetch updates for an existing repository
 fn fetch_repo(repo: &Repository) -> Result<(), GitError> {
     let mut remote = repo.find_remote("origin")?;
     let refspecs: Vec<String> = remote

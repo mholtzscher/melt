@@ -138,15 +138,25 @@ impl App {
                     "Updating {} input(s)...",
                     names.len()
                 )));
-                if let AppState::List(list) = &self.state {
-                    self.spawn_update(list.flake.path.clone(), names);
+                if let AppState::List(list) = &mut self.state {
+                    for name in &names {
+                        list.update_statuses
+                            .insert(name.clone(), crate::model::UpdateStatus::Updating);
+                    }
+                    let path = list.flake.path.clone();
+                    self.spawn_update(path, names);
                 }
             }
             Action::UpdateAll => {
                 debug!("Updating all inputs");
                 self.status_message = Some(StatusMessage::info("Updating all inputs..."));
-                if let AppState::List(list) = &self.state {
-                    self.spawn_update_all(list.flake.path.clone());
+                if let AppState::List(list) = &mut self.state {
+                    for input in &list.flake.inputs {
+                        list.update_statuses
+                            .insert(input.name().to_string(), crate::model::UpdateStatus::Updating);
+                    }
+                    let path = list.flake.path.clone();
+                    self.spawn_update_all(path);
                 }
             }
             Action::Refresh => {

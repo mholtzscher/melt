@@ -6,25 +6,26 @@ A terminal UI for managing Nix flake inputs, built with Rust and ratatui.
 
 ## Commands
 
+All commands should be run through Nix tooling. **Never commit code unless explicitly prompted by the user.**
+
 ```bash
 # Build
-cargo build                    # dev build
-cargo build --release          # release (LTO + strip)
+nix develop -c cargo build                    # dev build
+nix develop -c cargo build --release          # release (LTO + strip)
 
 # Test
-cargo test                     # all tests
-cargo test test_name           # single test
-cargo test module_name::       # module tests
-cargo test -- --nocapture      # with output
+nix develop -c cargo test                     # all tests
+nix develop -c cargo test test_name           # single test
+nix develop -c cargo test module_name::       # module tests
+nix develop -c cargo test -- --nocapture      # with output
 
 # Lint
-cargo fmt                      # format code
-cargo fmt -- --check           # check only
-cargo clippy                   # run lints
-cargo clippy --fix             # auto-fix
+nix develop -c cargo fmt                      # format code
+nix develop -c cargo fmt -- --check           # check only
+nix develop -c cargo clippy                   # run lints
+nix develop -c cargo clippy --fix             # auto-fix
 
-# Nix
-nix develop                    # dev shell
+# Build and run with Nix
 nix build                      # build package
 nix run                        # run directly
 ```

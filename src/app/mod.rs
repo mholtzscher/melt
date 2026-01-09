@@ -17,7 +17,7 @@ use tracing::{debug, warn};
 
 use crate::error::AppResult;
 use crate::event::poll_key;
-use crate::model::{FlakeInput, GitInput, StatusMessage};
+use crate::model::{FlakeInput, GitInput, StatusMessage, UpdateStatus};
 use crate::service::{GitService, NixService};
 use crate::tui::Tui;
 use crate::ui::render;
@@ -72,11 +72,15 @@ impl App {
                 break;
             }
 
-            tui.draw(|frame| self.render(frame))?;
-
             if let Some(key) = poll_key(Duration::from_millis(16)) {
                 self.handle_key(key).await;
             }
+
+            if matches!(self.state, AppState::Quitting) {
+                break;
+            }
+
+            tui.draw(|frame| self.render(frame))?;
 
             while let Ok(result) = self.task_rx.try_recv() {
                 self.handle_task_result(result);
@@ -141,7 +145,7 @@ impl App {
                 if let AppState::List(list) = &mut self.state {
                     for name in &names {
                         list.update_statuses
-                            .insert(name.clone(), crate::model::UpdateStatus::Updating);
+                            .insert(name.clone(), UpdateStatus::Updating);
                     }
                     let path = list.flake.path.clone();
                     self.spawn_update(path, names);
@@ -153,7 +157,7 @@ impl App {
                 if let AppState::List(list) = &mut self.state {
                     for input in &list.flake.inputs {
                         list.update_statuses
-                            .insert(input.name().to_string(), crate::model::UpdateStatus::Updating);
+                            .insert(input.name().to_string(), UpdateStatus::Updating);
                     }
                     let path = list.flake.path.clone();
                     self.spawn_update_all(path);
@@ -221,6 +225,8 @@ impl App {
                 self.status_message = Some(StatusMessage::success("Update complete"));
                 if let AppState::List(list) = &mut self.state {
                     list.clear_selection();
+                    list.update_statuses
+                        .retain(|_, status| !matches!(status, UpdateStatus::Updating));
                 }
                 self.spawn_load_flake();
             }
@@ -229,6 +235,8 @@ impl App {
                 self.status_message = Some(StatusMessage::error(format!("Update failed: {}", e)));
                 if let AppState::List(list) = &mut self.state {
                     list.busy = false;
+                    list.update_statuses
+                        .retain(|_, status| !matches!(status, UpdateStatus::Updating));
                 }
             }
             TaskResult::ChangelogLoaded(result) => match *result {

@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -28,6 +30,7 @@ jobs:
         uses: cachix/cachix-action@v15
         with:
           name: mholtzscher
+          authToken: ${{ github.event_name == 'release' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
       - name: Format
         run: nix develop .#ci -c cargo fmt -- --check
@@ -40,3 +43,6 @@ jobs:
 
       - name: Build (release)
         run: nix develop .#ci -c cargo build --release
+
+      - name: Nix Flake Check
+        run: nix flake check

@@ -46,7 +46,6 @@
           ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
             pkgs.darwin.libiconv
           ];
-
       in
       {
         packages.default = pkgs.rustPlatform.buildRustPackage {
@@ -93,6 +92,14 @@
           };
         };
 
+        apps.default = flake-utils.lib.mkApp {
+          drv = self.packages.${system}.default;
+        };
+
+        checks.default = self.packages.${system}.default;
+
+        formatter = pkgs.nixfmt;
+
         devShells.default = pkgs.mkShell {
           inherit buildInputs;
 
@@ -106,6 +113,14 @@
           RUST_BACKTRACE = 1;
 
           # For git2 to find libgit2
+          LIBGIT2_SYS_USE_PKG_CONFIG = 1;
+        };
+
+        devShells.ci = pkgs.mkShell {
+          inherit buildInputs nativeBuildInputs;
+
+          RUST_BACKTRACE = 1;
+
           LIBGIT2_SYS_USE_PKG_CONFIG = 1;
         };
       }

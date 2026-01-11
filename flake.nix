@@ -22,6 +22,7 @@
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
+        cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
 
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
           extensions = [
@@ -50,7 +51,7 @@
       {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "melt";
-          version = "0.1.0";
+          version = cargoToml.package.version;
 
           src = ./.;
 

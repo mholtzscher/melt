@@ -38,3 +38,5 @@ criterion/
 # Nix
 result
 result-*
+
+node_modules/

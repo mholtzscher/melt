@@ -1,0 +1,42 @@
+name: Update Dependencies
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT }}
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v16
+
+      - name: Update flake.lock
+        run: nix flake update
+
+      - name: Update Cargo.lock
+        run: nix develop .#ci -c cargo update
+
+      - name: Nix Build
+        run: nix build
+
+      - name: Create PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PAT }}
+          branch: chore/update-deps
+          delete-branch: true
+          title: "chore: update dependencies"
+          commit-message: "chore: update dependencies"
+          body: |
+            Updates flake.lock and Cargo.lock using scheduled workflow.

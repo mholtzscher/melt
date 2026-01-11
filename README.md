@@ -2,8 +2,6 @@
 
 A terminal UI for managing Nix flake inputs. View, update, and lock your flake inputs interactively.
 
-This is a Rust rewrite of [melt](https://github.com/anomalyco/melt), built with [ratatui](https://ratatui.rs).
-
 ## Features
 
 - **View flake inputs** - See all inputs with name, type, revision, and last modified time
@@ -52,27 +50,27 @@ melt /path/to/flake
 
 ### List View
 
-| Key | Action |
-|-----|--------|
-| `j` / `↓` | Move down |
-| `k` / `↑` | Move up |
-| `Space` | Toggle selection |
-| `u` | Update selected inputs |
-| `U` | Update all inputs |
-| `c` | View changelog for current input |
-| `r` | Refresh flake metadata |
-| `q` / `Esc` | Quit |
+| Key         | Action                           |
+| ----------- | -------------------------------- |
+| `j` / `↓`   | Move down                        |
+| `k` / `↑`   | Move up                          |
+| `Space`     | Toggle selection                 |
+| `u`         | Update selected inputs           |
+| `U`         | Update all inputs                |
+| `c`         | View changelog for current input |
+| `r`         | Refresh flake metadata           |
+| `q` / `Esc` | Quit                             |
 
 ### Changelog View
 
-| Key | Action |
-|-----|--------|
-| `j` / `↓` | Move down |
-| `k` / `↑` | Move up |
-| `Space` | Select commit for locking |
-| `y` | Confirm lock to selected commit |
-| `n` | Cancel lock |
-| `q` / `Esc` | Back to list |
+| Key         | Action                          |
+| ----------- | ------------------------------- |
+| `j` / `↓`   | Move down                       |
+| `k` / `↑`   | Move up                         |
+| `Space`     | Select commit for locking       |
+| `y`         | Confirm lock to selected commit |
+| `n`         | Cancel lock                     |
+| `q` / `Esc` | Back to list                    |
 
 ## Status Column
 
@@ -123,10 +121,10 @@ cargo build --release
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
+| Variable       | Description                                         |
+| -------------- | --------------------------------------------------- |
 | `GITHUB_TOKEN` | GitHub personal access token for API authentication |
-| `GH_TOKEN` | Alternative to `GITHUB_TOKEN` (used by `gh` CLI) |
+| `GH_TOKEN`     | Alternative to `GITHUB_TOKEN` (used by `gh` CLI)    |
 
 Setting a GitHub token increases the API rate limit from 60 to 5000 requests/hour.
 

@@ -130,6 +130,7 @@ impl App {
         match action {
             Action::None => {}
             Action::Quit => {
+                self.cancel_token.cancel();
                 self.state = AppState::Quitting;
             }
             Action::CancelAndQuit => {

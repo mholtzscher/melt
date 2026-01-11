@@ -4,13 +4,13 @@ use std::sync::Arc;
 use chrono::{TimeZone, Utc};
 use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
 use reqwest::Client;
+use serde::Deserialize;
+use tokio::sync::Semaphore;
+use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use crate::config::ServiceConfig;
-use serde::Deserialize;
-use tokio::sync::Semaphore;
-use tokio_util::sync::CancellationToken;
-
 use crate::error::GitError;
 use crate::model::{ChangelogData, Commit, FlakeInput, ForgeType, GitInput, UpdateStatus};
 
@@ -66,10 +66,10 @@ impl GitService {
     where
         F: FnMut(&str, UpdateStatus) + Send,
     {
-        let git_inputs: Vec<&GitInput> = inputs
+        let git_inputs: Vec<GitInput> = inputs
             .iter()
             .filter_map(|i| match i {
-                FlakeInput::Git(g) => Some(g),
+                FlakeInput::Git(g) => Some(g.clone()),
                 _ => None,
             })
             .collect();
@@ -84,29 +84,59 @@ impl GitService {
             on_status(&input.name, UpdateStatus::Checking);
         }
 
+        let mut join_set = JoinSet::new();
+
         for input in git_inputs {
             if self.cancel_token.is_cancelled() {
                 break;
             }
 
-            let _permit =
-                self.semaphore.acquire().await.map_err(|_| {
-                    GitError::CloneFailed("Failed to acquire semaphore".to_string())
-                })?;
+            let service = self.clone();
+            let semaphore = self.semaphore.clone();
 
-            let status = match self.check_input_updates(input).await {
-                Ok(0) => UpdateStatus::UpToDate,
-                Ok(count) => {
-                    debug!(input = %input.name, behind = count, "Updates available");
-                    UpdateStatus::Behind(count)
-                }
-                Err(e) => {
-                    warn!(input = %input.name, error = %e, "Failed to check input");
-                    UpdateStatus::Error(e.to_string())
-                }
-            };
+            join_set.spawn(async move {
+                let name = input.name.clone();
+                let _permit = match semaphore.acquire_owned().await {
+                    Ok(permit) => permit,
+                    Err(_) => {
+                        return (
+                            name,
+                            UpdateStatus::Error("Failed to acquire semaphore".to_string()),
+                        );
+                    }
+                };
 
-            on_status(&input.name, status);
+                let status = match service.check_input_updates(&input).await {
+                    Ok(0) => UpdateStatus::UpToDate,
+                    Ok(count) => {
+                        debug!(input = %name, behind = count, "Updates available");
+                        UpdateStatus::Behind(count)
+                    }
+                    Err(e) => {
+                        warn!(input = %name, error = %e, "Failed to check input");
+                        UpdateStatus::Error(e.to_string())
+                    }
+                };
+
+                (name, status)
+            });
+        }
+
+        loop {
+            tokio::select! {
+                _ = self.cancel_token.cancelled() => {
+                    join_set.abort_all();
+                    break;
+                }
+                next = join_set.join_next() => {
+                    match next {
+                        Some(Ok((name, status))) => on_status(&name, status),
+                        Some(Err(e)) if e.is_cancelled() => {}
+                        Some(Err(e)) => warn!(error = %e, "Update check task failed"),
+                        None => break,
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -275,7 +305,7 @@ impl GitService {
                     return Err(GitError::CloneFailed("Cancelled".to_string()));
                 }
 
-                let repo = ensure_repo(&cache_path, &clone_url, reference.as_deref())?;
+                let repo = ensure_repo(&cache_path, &clone_url, reference.as_deref(), &cancel)?;
                 let commits = get_commits_since(&repo, &rev, reference.as_deref())?;
                 Ok(commits.len())
             }),
@@ -569,7 +599,7 @@ impl GitService {
                     return Err(GitError::CloneFailed("Cancelled".to_string()));
                 }
 
-                let repo = ensure_repo(&cache_path, &clone_url, reference.as_deref())?;
+                let repo = ensure_repo(&cache_path, &clone_url, reference.as_deref(), &cancel)?;
 
                 let commits_ahead = get_commits_since(&repo, &rev, reference.as_deref())?;
                 let commits_from_locked = get_commits_from(&repo, &rev, 50)?;
@@ -645,7 +675,9 @@ fn get_clone_url(input: &GitInput) -> String {
 }
 
 /// Create git fetch options with SSH agent authentication
-fn create_fetch_options<'a>() -> FetchOptions<'a> {
+fn create_fetch_options<'a>(cancel: &CancellationToken) -> FetchOptions<'a> {
+    let cancel_for_progress = cancel.clone();
+
     let mut callbacks = RemoteCallbacks::new();
 
     callbacks.credentials(|_url, username_from_url, allowed_types| {
@@ -659,6 +691,8 @@ fn create_fetch_options<'a>() -> FetchOptions<'a> {
         }
     });
 
+    callbacks.transfer_progress(move |_stats| !cancel_for_progress.is_cancelled());
+
     let mut fetch_options = FetchOptions::new();
     fetch_options.remote_callbacks(callbacks);
     fetch_options
@@ -668,17 +702,22 @@ fn ensure_repo(
     cache_path: &Path,
     url: &str,
     reference: Option<&str>,
+    cancel: &CancellationToken,
 ) -> Result<Repository, GitError> {
+    if cancel.is_cancelled() {
+        return Err(GitError::CloneFailed("Cancelled".to_string()));
+    }
+
     if let Some(parent) = cache_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| GitError::CacheError(e.to_string()))?;
     }
 
     if cache_path.exists() {
         let repo = Repository::open_bare(cache_path)?;
-        fetch_repo(&repo)?;
+        fetch_repo(&repo, cancel)?;
         Ok(repo)
     } else {
-        clone_repo(cache_path, url, reference)
+        clone_repo(cache_path, url, reference, cancel)
     }
 }
 
@@ -686,12 +725,13 @@ fn clone_repo(
     cache_path: &Path,
     url: &str,
     reference: Option<&str>,
+    cancel: &CancellationToken,
 ) -> Result<Repository, GitError> {
     debug!(url = %url, "Cloning repository");
 
     let mut builder = git2::build::RepoBuilder::new();
     builder.bare(true);
-    builder.fetch_options(create_fetch_options());
+    builder.fetch_options(create_fetch_options(cancel));
 
     if let Some(r) = reference {
         builder.branch(r);
@@ -700,7 +740,7 @@ fn clone_repo(
     builder.clone(url, cache_path).map_err(GitError::from)
 }
 
-fn fetch_repo(repo: &Repository) -> Result<(), GitError> {
+fn fetch_repo(repo: &Repository, cancel: &CancellationToken) -> Result<(), GitError> {
     let mut remote = repo.find_remote("origin")?;
     let refspecs: Vec<String> = remote
         .refspecs()
@@ -708,7 +748,8 @@ fn fetch_repo(repo: &Repository) -> Result<(), GitError> {
         .collect();
     let refspec_strs: Vec<&str> = refspecs.iter().map(|s| s.as_str()).collect();
 
-    remote.fetch(&refspec_strs, Some(&mut create_fetch_options()), None)?;
+    let mut fetch_options = create_fetch_options(cancel);
+    remote.fetch(&refspec_strs, Some(&mut fetch_options), None)?;
     Ok(())
 }
 

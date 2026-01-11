@@ -24,7 +24,6 @@ jobs:
 
       - name: Install release dependencies
         run: npm install
-        working-directory: scripts
 
       - name: Run semantic-release
         run: npx semantic-release

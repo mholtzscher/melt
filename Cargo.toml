@@ -1,6 +1,6 @@
 [package]
 name = "melt"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 rust-version = "1.75"
 description = "A TUI for managing Nix flake inputs"

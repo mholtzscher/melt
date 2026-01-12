@@ -97,7 +97,7 @@ impl NixService {
             "flake",
             "metadata",
             "--json",
-            "--no-update-lock-file",
+            "--no-write-lock-file",
             &path_str,
         ])
         .await
@@ -111,6 +111,7 @@ impl NixService {
         }
 
         let mut cmd = Command::new("nix");
+        cmd.arg("--option").arg("warn-dirty").arg("false");
         cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
 
         let timeout = tokio::time::timeout(self.nix_command_timeout, cmd.output());

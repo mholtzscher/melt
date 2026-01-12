@@ -12,7 +12,7 @@ impl Default for Timeouts {
     fn default() -> Self {
         Self {
             nix_command: Duration::from_secs(30),
-            git_update_check: Duration::from_secs(60),
+            git_update_check: Duration::from_secs(120),
             git_changelog: Duration::from_secs(120),
             http_request: Duration::from_secs(30),
         }

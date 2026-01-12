@@ -146,7 +146,7 @@ impl GitService {
         match input.forge_type {
             ForgeType::GitHub => self.check_github_updates(input).await,
             ForgeType::GitLab => self.check_gitlab_updates(input).await,
-            ForgeType::SourceHut => self.check_sourcehut_updates(input).await,
+            ForgeType::SourceHut => self.check_git_updates(input).await,
             // For Codeberg/Gitea/Generic, fall back to git2 with timeout
             _ => self.check_git_updates(input).await,
         }
@@ -240,57 +240,8 @@ impl GitService {
         Ok(data.commits.len())
     }
 
-    async fn check_sourcehut_updates(&self, input: &GitInput) -> Result<usize, GitError> {
-        let host = input.host.as_deref().unwrap_or("git.sr.ht");
-        let owner = if input.owner.starts_with('~') {
-            input.owner.clone()
-        } else {
-            format!("~{}", input.owner)
-        };
-        let branch = input.reference.as_deref().unwrap_or("HEAD");
-
-        let url = format!(
-            "https://{}/api/{}/{}/log/{}",
-            host, owner, input.repo, branch
-        );
-
-        let resp = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| GitError::NetworkError(e.to_string()))?;
-
-        if !resp.status().is_success() {
-            return self.check_git_updates(input).await;
-        }
-
-        #[derive(Deserialize)]
-        struct SrhtCommit {
-            id: String,
-        }
-
-        #[derive(Deserialize)]
-        struct LogResponse {
-            results: Vec<SrhtCommit>,
-        }
-
-        let data: LogResponse = resp
-            .json()
-            .await
-            .map_err(|e| GitError::NetworkError(e.to_string()))?;
-
-        let count = data
-            .results
-            .iter()
-            .take_while(|c| !c.id.starts_with(&input.rev) && input.rev != c.id)
-            .count();
-
-        Ok(count)
-    }
-
     async fn check_git_updates(&self, input: &GitInput) -> Result<usize, GitError> {
-        let clone_url = get_clone_url(input);
+        let clone_url = ensure_clone_url(input)?;
         let cache_path = self.cache_path(&clone_url);
         let reference = input.reference.clone();
         let rev = input.rev.clone();
@@ -328,7 +279,7 @@ impl GitService {
         match input.forge_type {
             ForgeType::GitHub => self.get_github_changelog(input).await,
             ForgeType::GitLab => self.get_gitlab_changelog(input).await,
-            ForgeType::SourceHut => self.get_sourcehut_changelog(input).await,
+            ForgeType::SourceHut => self.get_git_changelog(input).await,
             _ => self.get_git_changelog(input).await,
         }
     }
@@ -506,87 +457,8 @@ impl GitService {
         })
     }
 
-    /// Get changelog via SourceHut API
-    async fn get_sourcehut_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
-        let host = input.host.as_deref().unwrap_or("git.sr.ht");
-        let owner = if input.owner.starts_with('~') {
-            input.owner.clone()
-        } else {
-            format!("~{}", input.owner)
-        };
-        let branch = input.reference.as_deref().unwrap_or("HEAD");
-
-        let url = format!(
-            "https://{}/api/{}/{}/log/{}",
-            host, owner, input.repo, branch
-        );
-
-        let resp = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| GitError::NetworkError(e.to_string()))?;
-
-        if !resp.status().is_success() {
-            return self.get_git_changelog(input).await;
-        }
-
-        #[derive(Deserialize)]
-        struct SrhtAuthor {
-            name: String,
-        }
-
-        #[derive(Deserialize)]
-        struct SrhtCommit {
-            id: String,
-            message: String,
-            author: SrhtAuthor,
-            timestamp: String,
-        }
-
-        #[derive(Deserialize)]
-        struct LogResponse {
-            results: Vec<SrhtCommit>,
-        }
-
-        let data: LogResponse = resp
-            .json()
-            .await
-            .map_err(|e| GitError::NetworkError(e.to_string()))?;
-
-        let mut result_commits = Vec::new();
-        let mut locked_idx = None;
-
-        for (idx, c) in data.results.iter().enumerate() {
-            let is_locked = c.id.starts_with(&input.rev) || c.id == input.rev;
-            if is_locked {
-                locked_idx = Some(idx);
-            }
-
-            let date = chrono::DateTime::parse_from_rfc3339(&c.timestamp)
-                .map(|d| d.with_timezone(&Utc))
-                .unwrap_or_else(|_| Utc::now());
-
-            let message = c.message.lines().next().unwrap_or("").to_string();
-
-            result_commits.push(Commit {
-                sha: c.id.clone(),
-                message,
-                author: c.author.name.clone(),
-                date,
-                is_locked,
-            });
-        }
-
-        Ok(ChangelogData {
-            commits: result_commits,
-            locked_idx,
-        })
-    }
-
     async fn get_git_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
-        let clone_url = get_clone_url(input);
+        let clone_url = ensure_clone_url(input)?;
         let cache_path = self.cache_path(&clone_url);
         let reference = input.reference.clone();
         let rev = input.rev.clone();
@@ -669,9 +541,26 @@ fn get_cache_dir() -> PathBuf {
 
 /// Get the clone URL for a git input
 fn get_clone_url(input: &GitInput) -> String {
+    if input.forge_type == ForgeType::Generic {
+        let url = input.url.trim();
+        return url.strip_prefix("git+").unwrap_or(url).to_string();
+    }
+
     input
         .forge_type
         .clone_url(&input.owner, &input.repo, input.host.as_deref())
+}
+
+fn ensure_clone_url(input: &GitInput) -> Result<String, GitError> {
+    let url = get_clone_url(input);
+    if url.trim().is_empty() {
+        return Err(GitError::CloneFailed(format!(
+            "Missing clone URL for input '{}'",
+            input.name
+        )));
+    }
+
+    Ok(url)
 }
 
 /// Create git fetch options with SSH agent authentication
@@ -828,6 +717,51 @@ fn resolve_ref(repo: &Repository, refname: &str) -> Result<git2::Oid, GitError> 
                 return Ok(oid);
             }
         }
+
+        for candidate in ["main", "master"] {
+            if let Ok(reference) =
+                repo.find_reference(&format!("refs/remotes/origin/{}", candidate))
+            {
+                if let Some(oid) = reference.target() {
+                    return Ok(oid);
+                }
+            }
+
+            if let Ok(reference) = repo.find_reference(&format!("refs/heads/{}", candidate)) {
+                if let Some(oid) = reference.target() {
+                    return Ok(oid);
+                }
+            }
+        }
+
+        if let Ok(references) = repo.references() {
+            let mut single_remote = None;
+            let mut remote_count = 0usize;
+
+            for reference in references.flatten() {
+                if let Some(name) = reference.name() {
+                    if name.starts_with("refs/remotes/origin/") && !name.ends_with("/HEAD") {
+                        remote_count += 1;
+                        if remote_count == 1 {
+                            single_remote = Some(name.to_string());
+                        } else {
+                            single_remote = None;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if remote_count == 1 {
+                if let Some(reference_name) = single_remote {
+                    if let Ok(reference) = repo.find_reference(&reference_name) {
+                        if let Some(oid) = reference.target() {
+                            return Ok(oid);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if let Ok(obj) = repo.revparse_single(refname) {
@@ -891,6 +825,46 @@ mod tests {
         assert_eq!(
             get_clone_url(&input),
             "https://github.com/NixOS/nixpkgs.git"
+        );
+    }
+
+    #[test]
+    fn test_get_clone_url_generic_uses_input_url() {
+        let input = GitInput {
+            name: "emacs".to_string(),
+            owner: "gnu".to_string(),
+            repo: "emacs".to_string(),
+            forge_type: ForgeType::Generic,
+            host: None,
+            reference: None,
+            rev: "abc1234".to_string(),
+            last_modified: 0,
+            url: "https://git.savannah.gnu.org/git/emacs.git".to_string(),
+        };
+
+        assert_eq!(
+            get_clone_url(&input),
+            "https://git.savannah.gnu.org/git/emacs.git"
+        );
+    }
+
+    #[test]
+    fn test_get_clone_url_generic_strips_git_prefix() {
+        let input = GitInput {
+            name: "forgejo".to_string(),
+            owner: "forgejo".to_string(),
+            repo: "forgejo".to_string(),
+            forge_type: ForgeType::Generic,
+            host: None,
+            reference: None,
+            rev: "abc1234".to_string(),
+            last_modified: 0,
+            url: "git+https://codeberg.org/forgejo/forgejo".to_string(),
+        };
+
+        assert_eq!(
+            get_clone_url(&input),
+            "https://codeberg.org/forgejo/forgejo"
         );
     }
 

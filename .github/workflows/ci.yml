@@ -25,6 +25,8 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v21

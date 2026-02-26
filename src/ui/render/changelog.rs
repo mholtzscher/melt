@@ -4,12 +4,12 @@ use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Row, Table},
+    widgets::{Block, Borders, Clear, Paragraph, Row, Table, TableState},
     Frame,
 };
 
 use crate::app::state::ChangelogState;
-use crate::model::{StatusLevel, StatusMessage};
+use crate::app::status::{StatusLevel, StatusMessage};
 use crate::ui::theme;
 use crate::util::time::format_relative_short;
 
@@ -109,7 +109,10 @@ fn render_commits_table(frame: &mut Frame, cs: &mut ChangelogState, area: Rect) 
                 .add_modifier(Modifier::BOLD),
         );
 
-    frame.render_stateful_widget(table, area, &mut cs.table_state);
+    let mut table_state = TableState::default();
+    table_state.select(Some(cs.cursor));
+
+    frame.render_stateful_widget(table, area, &mut table_state);
 }
 
 /// Render the changelog help bar

@@ -6,6 +6,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::event::KeyEventExt;
 use crate::model::FlakeInput;
+use crate::service::build_lock_url;
 
 use super::state::{AppState, ChangelogState, ListState, StateKind};
 
@@ -186,17 +187,21 @@ fn handle_confirm_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
                 None => return Action::None,
             };
 
-            let lock_url = cs.input.forge_type.lock_url(
+            let lock_url = match build_lock_url(
+                cs.input.forge_type,
                 &cs.input.owner,
                 &cs.input.repo,
                 &commit.sha,
                 cs.input.host.as_deref(),
-            );
-
-            if lock_url.is_empty() {
-                cs.hide_confirm();
-                return Action::ShowWarning("Cannot generate lock URL for this input".to_string());
-            }
+            ) {
+                Some(url) => url,
+                None => {
+                    cs.hide_confirm();
+                    return Action::ShowWarning(
+                        "Cannot generate lock URL for this input".to_string(),
+                    );
+                }
+            };
 
             Action::ConfirmLock {
                 input_name: cs.input.name.clone(),

@@ -10,6 +10,7 @@ use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
+use super::policy::build_clone_url;
 use crate::config::ServiceConfig;
 use crate::error::GitError;
 use crate::model::{ChangelogData, Commit, FlakeInput, ForgeType, GitInput, UpdateStatus};
@@ -546,9 +547,13 @@ fn get_clone_url(input: &GitInput) -> String {
         return url.strip_prefix("git+").unwrap_or(url).to_string();
     }
 
-    input
-        .forge_type
-        .clone_url(&input.owner, &input.repo, input.host.as_deref())
+    build_clone_url(
+        input.forge_type,
+        &input.owner,
+        &input.repo,
+        input.host.as_deref(),
+    )
+    .unwrap_or_default()
 }
 
 fn ensure_clone_url(input: &GitInput) -> Result<String, GitError> {

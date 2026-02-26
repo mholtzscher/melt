@@ -4,12 +4,13 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Row, Table},
+    widgets::{Block, Borders, Paragraph, Row, Table, TableState},
     Frame,
 };
 
 use crate::app::state::ListState;
-use crate::model::{FlakeInput, StatusLevel, StatusMessage, UpdateStatus};
+use crate::app::status::{StatusLevel, StatusMessage};
+use crate::model::{FlakeInput, UpdateStatus};
 use crate::ui::theme;
 use crate::util::time::format_relative;
 
@@ -27,6 +28,18 @@ pub fn render_list(
 
     render_input_table(frame, list, chunks[0], tick_count);
     render_help_bar(frame, list, status_message, chunks[1], tick_count);
+}
+
+fn format_update_status(status: &UpdateStatus, tick_count: u64) -> String {
+    match status {
+        UpdateStatus::Unknown => "-".to_string(),
+        UpdateStatus::Checking | UpdateStatus::Updating => {
+            get_spinner_frame(tick_count).to_string()
+        }
+        UpdateStatus::UpToDate => "ok".to_string(),
+        UpdateStatus::Behind(n) => format!("+{}", n),
+        UpdateStatus::Error(_) => "?".to_string(),
+    }
 }
 
 /// Render the input table
@@ -62,12 +75,7 @@ fn render_input_table(frame: &mut Frame, list: &mut ListState, area: Rect, tick_
                 .cloned()
                 .unwrap_or_default();
 
-            let status_display = match &status {
-                UpdateStatus::Checking | UpdateStatus::Updating => {
-                    get_spinner_frame(tick_count).to_string()
-                }
-                _ => status.display(),
-            };
+            let status_display = format_update_status(&status, tick_count);
 
             let status_color = match &status {
                 UpdateStatus::Unknown => theme::TEXT_DIM,
@@ -124,7 +132,12 @@ fn render_input_table(frame: &mut Frame, list: &mut ListState, area: Rect, tick_
                 .add_modifier(Modifier::BOLD),
         );
 
-    frame.render_stateful_widget(table, area, &mut list.table_state);
+    let mut table_state = TableState::default();
+    if !list.flake.inputs.is_empty() {
+        table_state.select(Some(list.cursor));
+    }
+
+    frame.render_stateful_widget(table, area, &mut table_state);
 }
 
 /// Render the help bar

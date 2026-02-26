@@ -5,8 +5,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use ratatui::widgets::TableState;
-
 use crate::error::{AppError, GitError};
 use crate::model::{ChangelogData, FlakeData, GitInput, UpdateStatus};
 
@@ -53,12 +51,11 @@ pub enum StateKind {
 }
 
 /// State for the list view
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ListState {
     pub flake: FlakeData,
     pub cursor: usize,
     pub selected: HashSet<usize>,
-    pub table_state: TableState,
     pub update_statuses: HashMap<String, UpdateStatus>,
     /// True when a background operation is in progress
     pub busy: bool,
@@ -67,15 +64,10 @@ pub struct ListState {
 impl ListState {
     /// Create a new ListState from flake data
     pub fn new(flake: FlakeData) -> Self {
-        let mut table_state = TableState::default();
-        if !flake.inputs.is_empty() {
-            table_state.select(Some(0));
-        }
         Self {
             flake,
             cursor: 0,
             selected: HashSet::new(),
-            table_state,
             update_statuses: HashMap::new(),
             busy: false,
         }
@@ -85,7 +77,6 @@ impl ListState {
     pub fn cursor_down(&mut self) {
         if self.cursor < self.flake.inputs.len().saturating_sub(1) {
             self.cursor += 1;
-            self.table_state.select(Some(self.cursor));
         }
     }
 
@@ -93,7 +84,6 @@ impl ListState {
     pub fn cursor_up(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
-            self.table_state.select(Some(self.cursor));
         }
     }
 
@@ -128,25 +118,11 @@ impl ListState {
         // Clamp cursor to new input count
         if self.cursor >= self.flake.inputs.len() {
             self.cursor = self.flake.inputs.len().saturating_sub(1);
-            self.table_state.select(Some(self.cursor));
         }
         // Clear selections that are now out of bounds
         self.selected.retain(|&i| i < self.flake.inputs.len());
         // Clear old update statuses
         self.update_statuses.clear();
-    }
-}
-
-impl Clone for ListState {
-    fn clone(&self) -> Self {
-        Self {
-            flake: self.flake.clone(),
-            cursor: self.cursor,
-            selected: self.selected.clone(),
-            table_state: TableState::default().with_selected(self.table_state.selected()),
-            update_statuses: self.update_statuses.clone(),
-            busy: self.busy,
-        }
     }
 }
 
@@ -159,8 +135,6 @@ pub struct ChangelogState {
     pub data: ChangelogData,
     /// Current cursor position
     pub cursor: usize,
-    /// Table state for rendering
-    pub table_state: TableState,
     /// If Some, show confirm dialog for locking to this commit index
     pub confirm_lock: Option<usize>,
     /// Parent list state (kept for returning)
@@ -171,15 +145,10 @@ impl ChangelogState {
     /// Create a new ChangelogState
     pub fn new(input: GitInput, data: ChangelogData, parent_list: ListState) -> Self {
         let cursor = data.locked_idx.unwrap_or(0);
-        let mut table_state = TableState::default();
-        if !data.commits.is_empty() {
-            table_state.select(Some(cursor));
-        }
         Self {
             input,
             data,
             cursor,
-            table_state,
             confirm_lock: None,
             parent_list,
         }
@@ -189,7 +158,6 @@ impl ChangelogState {
     pub fn cursor_down(&mut self) {
         if self.cursor < self.data.commits.len().saturating_sub(1) {
             self.cursor += 1;
-            self.table_state.select(Some(self.cursor));
         }
     }
 
@@ -197,7 +165,6 @@ impl ChangelogState {
     pub fn cursor_up(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
-            self.table_state.select(Some(self.cursor));
         }
     }
 

@@ -44,12 +44,13 @@ pub mod ui;
 pub mod util;
 
 // Re-export commonly used types at the crate root
+pub use app::status::{StatusLevel, StatusMessage};
 pub use app::App;
 pub use config::{ServiceConfig, Timeouts};
 pub use error::{AppError, AppResult, GitError};
 pub use model::{
     ChangelogData, Commit, FlakeData, FlakeInput, ForgeType, GitInput, OtherInput, PathInput,
-    StatusLevel, StatusMessage, UpdateStatus,
+    UpdateStatus,
 };
 pub use service::{GitService, NixService};
 pub use tui::Tui;

@@ -7,6 +7,7 @@
 
 pub mod handler;
 pub mod state;
+pub mod status;
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -17,13 +18,14 @@ use tracing::{debug, warn};
 
 use crate::error::AppResult;
 use crate::event::poll_key;
-use crate::model::{FlakeInput, GitInput, StatusMessage, UpdateStatus};
+use crate::model::{FlakeInput, GitInput, UpdateStatus};
 use crate::service::{GitService, NixService};
 use crate::tui::Tui;
 use crate::ui::render;
 
 pub use handler::Action;
 pub use state::{AppState, ChangelogLoadedData, ChangelogState, ListState, TaskResult};
+use status::StatusMessage;
 
 /// Main application struct
 pub struct App {

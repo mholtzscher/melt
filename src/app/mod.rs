@@ -6,10 +6,12 @@
 //! - `handler`: Input event handling
 
 pub mod handler;
+pub mod ports;
 pub mod state;
 pub mod status;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
@@ -20,6 +22,8 @@ use crate::error::AppResult;
 use crate::event::poll_key;
 use crate::model::{FlakeInput, GitInput, UpdateStatus};
 use crate::service::{GitService, NixService};
+
+use self::ports::{GitPort, NixPort, StatusCallback};
 use crate::tui::Tui;
 use crate::ui::render;
 
@@ -33,10 +37,10 @@ pub struct App {
     flake_path: PathBuf,
     /// Current state
     state: AppState,
-    /// Nix service
-    nix: NixService,
-    /// Git service
-    git: GitService,
+    /// Nix port
+    nix: Arc<dyn NixPort>,
+    /// Git port
+    git: Arc<dyn GitPort>,
     /// Cancellation token for async operations
     cancel_token: CancellationToken,
     /// Status message to display
@@ -52,12 +56,23 @@ pub struct App {
 impl App {
     pub fn new(flake_path: PathBuf) -> Self {
         let cancel_token = CancellationToken::new();
+        let nix: Arc<dyn NixPort> = Arc::new(NixService::new(cancel_token.clone()));
+        let git: Arc<dyn GitPort> = Arc::new(GitService::new(cancel_token.clone()));
+        Self::new_with_ports(flake_path, nix, git, cancel_token)
+    }
+
+    pub fn new_with_ports(
+        flake_path: PathBuf,
+        nix: Arc<dyn NixPort>,
+        git: Arc<dyn GitPort>,
+        cancel_token: CancellationToken,
+    ) -> Self {
         let (task_tx, task_rx) = mpsc::unbounded_channel();
         Self {
             flake_path,
             state: AppState::Loading,
-            nix: NixService::new(cancel_token.clone()),
-            git: GitService::new(cancel_token.clone()),
+            nix,
+            git,
             cancel_token,
             status_message: None,
             tick_count: 0,
@@ -291,7 +306,7 @@ impl App {
     }
 
     fn spawn_load_flake(&self) {
-        let nix = self.nix.clone();
+        let nix = Arc::clone(&self.nix);
         let path = self.flake_path.clone();
         let tx = self.task_tx.clone();
 
@@ -302,7 +317,7 @@ impl App {
     }
 
     fn spawn_update(&self, path: PathBuf, names: Vec<String>) {
-        let nix = self.nix.clone();
+        let nix = Arc::clone(&self.nix);
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
@@ -312,7 +327,7 @@ impl App {
     }
 
     fn spawn_update_all(&self, path: PathBuf) {
-        let nix = self.nix.clone();
+        let nix = Arc::clone(&self.nix);
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
@@ -322,7 +337,7 @@ impl App {
     }
 
     fn spawn_load_changelog(&self, input: GitInput, parent_list: ListState) {
-        let git = self.git.clone();
+        let git = Arc::clone(&self.git);
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
@@ -338,7 +353,7 @@ impl App {
     }
 
     fn spawn_lock(&self, path: PathBuf, name: String, lock_url: String) {
-        let nix = self.nix.clone();
+        let nix = Arc::clone(&self.nix);
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
@@ -348,18 +363,17 @@ impl App {
     }
 
     fn spawn_check_updates(&self, inputs: Vec<FlakeInput>) {
-        let git = self.git.clone();
+        let git = Arc::clone(&self.git);
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
-            let _ = git
-                .check_updates(&inputs, |name, status| {
-                    let _ = tx.send(TaskResult::InputStatus {
-                        name: name.to_string(),
-                        status,
-                    });
-                })
-                .await;
+            let callback: StatusCallback<'_> = Box::new(move |name, status| {
+                let _ = tx.send(TaskResult::InputStatus {
+                    name: name.to_string(),
+                    status,
+                });
+            });
+            let _ = git.check_updates(&inputs, callback).await;
         });
     }
 

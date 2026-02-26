@@ -238,16 +238,16 @@ impl App {
     }
 
     fn handle_task_result(&mut self, result: TaskResult) {
+        let effects = reducer::effects_for_task_result(&result);
+
         match result {
             TaskResult::FlakeLoaded(Ok(flake)) => {
-                let inputs = flake.inputs.clone();
                 if let AppState::List(list) = &mut self.state {
                     list.update_flake(flake);
                 } else {
                     self.state = AppState::List(ListState::new(flake));
                 }
                 self.status_message = None;
-                self.run_effect(Effect::CheckUpdates { inputs });
             }
             TaskResult::FlakeLoaded(Err(e)) => {
                 warn!(error = %e, "Failed to load flake");
@@ -260,7 +260,6 @@ impl App {
                     list.update_statuses
                         .retain(|_, status| !matches!(status, UpdateStatus::Updating));
                 }
-                self.run_effect(Effect::LoadFlake);
             }
             TaskResult::UpdateComplete(Err(e)) => {
                 warn!(error = %e, "Update failed");
@@ -302,7 +301,6 @@ impl App {
                     list.busy = true;
                     self.state = AppState::List(list);
                 }
-                self.run_effect(Effect::LoadFlake);
             }
             TaskResult::LockComplete(Err(e)) => {
                 warn!(error = %e, "Lock failed");
@@ -316,6 +314,10 @@ impl App {
                     list.update_statuses.insert(name, status);
                 }
             }
+        }
+
+        for effect in effects {
+            self.run_effect(effect);
         }
     }
 

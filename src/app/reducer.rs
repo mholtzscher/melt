@@ -1,6 +1,7 @@
 use crate::model::FlakeInput;
 
 use super::effects::Effect;
+use super::state::TaskResult;
 use super::{Action, AppState};
 
 pub fn effects_for_action(state: &AppState, action: &Action) -> Vec<Effect> {
@@ -50,5 +51,17 @@ pub fn effects_for_action(state: &AppState, action: &Action) -> Vec<Effect> {
             }],
             _ => Vec::new(),
         },
+    }
+}
+
+pub fn effects_for_task_result(result: &TaskResult) -> Vec<Effect> {
+    match result {
+        TaskResult::FlakeLoaded(Ok(flake)) => vec![Effect::CheckUpdates {
+            inputs: flake.inputs.clone(),
+        }],
+        TaskResult::UpdateComplete(Ok(())) | TaskResult::LockComplete(Ok(())) => {
+            vec![Effect::LoadFlake]
+        }
+        _ => Vec::new(),
     }
 }

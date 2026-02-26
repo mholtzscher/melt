@@ -188,7 +188,7 @@ impl App {
             Action::OpenChangelog { .. } => {
                 if let Some(Effect::LoadChangelog { parent_list, .. }) = effects.first() {
                     self.status_message = Some(StatusMessage::info("Loading changelog..."));
-                    self.state = AppState::LoadingChangelog(parent_list.clone());
+                    self.state = AppState::LoadingChangelog(parent_list.as_ref().clone());
                 }
             }
             Action::CloseChangelog => {
@@ -226,7 +226,7 @@ impl App {
             Effect::Update { path, names } => self.spawn_update(path, names),
             Effect::UpdateAll { path } => self.spawn_update_all(path),
             Effect::LoadChangelog { input, parent_list } => {
-                self.spawn_load_changelog(input, parent_list)
+                self.spawn_load_changelog(*input, *parent_list)
             }
             Effect::Lock {
                 path,

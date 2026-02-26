@@ -30,7 +30,10 @@ pub fn effects_for_action(state: &AppState, action: &Action) -> Vec<Effect> {
                     let input = git_input.clone();
                     let mut parent_list = list.clone();
                     parent_list.busy = false;
-                    vec![Effect::LoadChangelog { input, parent_list }]
+                    vec![Effect::LoadChangelog {
+                        input: Box::new(input),
+                        parent_list: Box::new(parent_list),
+                    }]
                 }
                 _ => Vec::new(),
             },

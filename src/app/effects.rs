@@ -15,8 +15,8 @@ pub enum Effect {
         path: PathBuf,
     },
     LoadChangelog {
-        input: GitInput,
-        parent_list: ListState,
+        input: Box<GitInput>,
+        parent_list: Box<ListState>,
     },
     Lock {
         path: PathBuf,

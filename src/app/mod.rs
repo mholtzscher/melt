@@ -5,8 +5,10 @@
 //! - `state`: State types for different views
 //! - `handler`: Input event handling
 
+pub mod effects;
 pub mod handler;
 pub mod ports;
+pub mod reducer;
 pub mod state;
 pub mod status;
 
@@ -23,6 +25,7 @@ use crate::event::poll_key;
 use crate::model::{FlakeInput, GitInput, UpdateStatus};
 use crate::service::{GitService, NixService};
 
+use self::effects::Effect;
 use self::ports::{GitPort, NixPort, StatusCallback};
 use crate::tui::Tui;
 use crate::ui::render;
@@ -82,7 +85,7 @@ impl App {
     }
 
     pub async fn run(&mut self, tui: &mut Tui) -> AppResult<()> {
-        self.spawn_load_flake();
+        self.run_effect(Effect::LoadFlake);
 
         loop {
             if matches!(self.state, AppState::Quitting) {
@@ -144,6 +147,8 @@ impl App {
     }
 
     async fn execute_action(&mut self, action: Action) {
+        let effects = reducer::effects_for_action(&self.state, &action);
+
         match action {
             Action::None => {}
             Action::Quit => {
@@ -165,8 +170,6 @@ impl App {
                         list.update_statuses
                             .insert(name.clone(), UpdateStatus::Updating);
                     }
-                    let path = list.flake.path.clone();
-                    self.spawn_update(path, names);
                 }
             }
             Action::UpdateAll => {
@@ -177,24 +180,15 @@ impl App {
                         list.update_statuses
                             .insert(input.name().to_string(), UpdateStatus::Updating);
                     }
-                    let path = list.flake.path.clone();
-                    self.spawn_update_all(path);
                 }
             }
             Action::Refresh => {
                 self.status_message = Some(StatusMessage::info("Refreshing..."));
-                self.spawn_load_flake();
             }
-            Action::OpenChangelog { input_idx } => {
-                if let AppState::List(list) = &self.state {
-                    if let Some(FlakeInput::Git(git_input)) = list.flake.inputs.get(input_idx) {
-                        let input = git_input.clone();
-                        let mut parent = list.clone();
-                        parent.busy = false;
-                        self.status_message = Some(StatusMessage::info("Loading changelog..."));
-                        self.state = AppState::LoadingChangelog(parent.clone());
-                        self.spawn_load_changelog(input, parent);
-                    }
+            Action::OpenChangelog { .. } => {
+                if let Some(Effect::LoadChangelog { parent_list, .. }) = effects.first() {
+                    self.status_message = Some(StatusMessage::info("Loading changelog..."));
+                    self.state = AppState::LoadingChangelog(parent_list.clone());
                 }
             }
             Action::CloseChangelog => {
@@ -202,7 +196,7 @@ impl App {
             }
             Action::ConfirmLock {
                 input_name,
-                lock_url,
+                lock_url: _,
             } => {
                 debug!(input = %input_name, "Locking to commit");
                 if let AppState::Changelog(cs) = &self.state {
@@ -214,12 +208,32 @@ impl App {
                             input_name, short_sha
                         )));
                     }
-                    self.spawn_lock(cs.parent_list.flake.path.clone(), input_name, lock_url);
                 }
             }
             Action::ShowWarning(msg) => {
                 self.status_message = Some(StatusMessage::warning(msg));
             }
+        }
+
+        for effect in effects {
+            self.run_effect(effect);
+        }
+    }
+
+    fn run_effect(&self, effect: Effect) {
+        match effect {
+            Effect::LoadFlake => self.spawn_load_flake(),
+            Effect::Update { path, names } => self.spawn_update(path, names),
+            Effect::UpdateAll { path } => self.spawn_update_all(path),
+            Effect::LoadChangelog { input, parent_list } => {
+                self.spawn_load_changelog(input, parent_list)
+            }
+            Effect::Lock {
+                path,
+                name,
+                lock_url,
+            } => self.spawn_lock(path, name, lock_url),
+            Effect::CheckUpdates { inputs } => self.spawn_check_updates(inputs),
         }
     }
 
@@ -233,7 +247,7 @@ impl App {
                     self.state = AppState::List(ListState::new(flake));
                 }
                 self.status_message = None;
-                self.spawn_check_updates(inputs);
+                self.run_effect(Effect::CheckUpdates { inputs });
             }
             TaskResult::FlakeLoaded(Err(e)) => {
                 warn!(error = %e, "Failed to load flake");
@@ -246,7 +260,7 @@ impl App {
                     list.update_statuses
                         .retain(|_, status| !matches!(status, UpdateStatus::Updating));
                 }
-                self.spawn_load_flake();
+                self.run_effect(Effect::LoadFlake);
             }
             TaskResult::UpdateComplete(Err(e)) => {
                 warn!(error = %e, "Update failed");
@@ -288,7 +302,7 @@ impl App {
                     list.busy = true;
                     self.state = AppState::List(list);
                 }
-                self.spawn_load_flake();
+                self.run_effect(Effect::LoadFlake);
             }
             TaskResult::LockComplete(Err(e)) => {
                 warn!(error = %e, "Lock failed");

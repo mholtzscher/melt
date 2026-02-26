@@ -2,7 +2,7 @@ use std::mem;
 
 use crate::model::{FlakeInput, UpdateStatus};
 
-use super::effects::Effect;
+use super::effects::{Effect, LockRequest};
 use super::state::TaskResult;
 use super::{Action, AppState, ChangelogState, ListState};
 
@@ -91,15 +91,24 @@ pub fn effects_for_action(state: &AppState, action: &Action) -> Vec<Effect> {
             },
             _ => Vec::new(),
         },
-        Action::ConfirmLock {
-            input_name,
-            lock_url,
-        } => match state {
-            AppState::Changelog(cs) => vec![Effect::Lock {
-                path: cs.parent_list.flake.path.clone(),
-                name: input_name.clone(),
-                lock_url: lock_url.clone(),
-            }],
+        Action::ConfirmLock => match state {
+            AppState::Changelog(cs) => {
+                let Some(commit_idx) = cs.confirm_lock else {
+                    return Vec::new();
+                };
+                let Some(commit) = cs.data.commits.get(commit_idx) else {
+                    return Vec::new();
+                };
+                vec![Effect::Lock(LockRequest {
+                    path: cs.parent_list.flake.path.clone(),
+                    name: cs.input.name.clone(),
+                    owner: cs.input.owner.clone(),
+                    repo: cs.input.repo.clone(),
+                    rev: commit.sha.clone(),
+                    forge_type: cs.input.forge_type,
+                    host: cs.input.host.clone(),
+                })]
+            }
             _ => Vec::new(),
         },
     }
@@ -201,16 +210,16 @@ fn reduce_action(state: &mut AppState, action: &Action) -> Transition {
             }
         }
         Action::CloseChangelog => close_changelog(state),
-        Action::ConfirmLock {
-            input_name,
-            lock_url: _,
-        } => {
+        Action::ConfirmLock => {
             if let AppState::Changelog(cs) = state {
-                let commit_idx = cs.confirm_lock.unwrap_or(0);
-                if let Some(commit) = cs.data.commits.get(commit_idx) {
-                    let short_sha = &commit.sha[..7.min(commit.sha.len())];
-                    transition.status =
-                        StatusCommand::Info(format!("Locking {} to {}...", input_name, short_sha));
+                if let Some(commit_idx) = cs.confirm_lock {
+                    if let Some(commit) = cs.data.commits.get(commit_idx) {
+                        let short_sha = &commit.sha[..7.min(commit.sha.len())];
+                        transition.status = StatusCommand::Info(format!(
+                            "Locking {} to {}...",
+                            cs.input.name, short_sha
+                        ));
+                    }
                 }
             }
         }

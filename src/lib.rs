@@ -21,13 +21,18 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use std::path::PathBuf;
-//! use melt::{App, Tui};
+//! use std::{path::PathBuf, sync::Arc};
+//! use tokio_util::sync::CancellationToken;
+//! use melt::app::ports::{GitPort, NixPort};
+//! use melt::{App, GitService, NixService, Tui};
 //!
 //! #[tokio::main]
 //! async fn main() -> melt::AppResult<()> {
 //!     let mut tui = Tui::new()?;
-//!     let mut app = App::new(PathBuf::from("."));
+//!     let cancel_token = CancellationToken::new();
+//!     let nix: Arc<dyn NixPort> = Arc::new(NixService::new(cancel_token.clone()));
+//!     let git: Arc<dyn GitPort> = Arc::new(GitService::new(cancel_token.clone()));
+//!     let mut app = App::new_with_ports(PathBuf::from("."), nix, git, cancel_token);
 //!     app.run(&mut tui).await
 //! }
 //! ```

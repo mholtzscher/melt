@@ -196,28 +196,74 @@ pub struct ChangelogLoadedData {
 /// Effect correlation id for async task completion.
 pub type EffectId = u64;
 
+/// App-level task failure kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskErrorKind {
+    Cancelled,
+    Timeout,
+    External,
+}
+
+/// App-level task failure payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskError {
+    pub kind: TaskErrorKind,
+    pub message: String,
+}
+
+impl TaskError {
+    pub fn external(message: impl Into<String>) -> Self {
+        Self {
+            kind: TaskErrorKind::External,
+            message: message.into(),
+        }
+    }
+
+    pub fn from_message(message: impl Into<String>) -> Self {
+        let message = message.into();
+        let lower = message.to_lowercase();
+        let kind = if lower.contains("cancel") {
+            TaskErrorKind::Cancelled
+        } else if lower.contains("timeout") || lower.contains("timed out") {
+            TaskErrorKind::Timeout
+        } else {
+            TaskErrorKind::External
+        };
+
+        Self { kind, message }
+    }
+}
+
+impl std::fmt::Display for TaskError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for TaskError {}
+
 /// Messages from background tasks
 #[derive(Debug)]
 pub enum TaskResult {
     /// Flake metadata loaded
     FlakeLoaded {
         effect_id: EffectId,
-        result: Result<FlakeData, String>,
+        result: Result<FlakeData, TaskError>,
     },
     /// Input update completed
     UpdateComplete {
         effect_id: EffectId,
-        result: Result<(), String>,
+        result: Result<(), TaskError>,
     },
     /// Changelog loaded
     ChangelogLoaded {
         effect_id: EffectId,
-        result: Box<Result<ChangelogLoadedData, String>>,
+        result: Box<Result<ChangelogLoadedData, TaskError>>,
     },
     /// Lock completed
     LockComplete {
         effect_id: EffectId,
-        result: Result<(), String>,
+        result: Result<(), TaskError>,
     },
     /// Status update for a single input
     InputStatus {

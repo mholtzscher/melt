@@ -9,10 +9,12 @@ mod tui;
 mod ui;
 mod util;
 
-use std::{path::PathBuf, process::ExitCode};
+use std::{path::PathBuf, process::ExitCode, sync::Arc};
 
 use clap::Parser;
+use tokio_util::sync::CancellationToken;
 
+use app::ports::{GitPort, NixPort};
 use app::App;
 use error::AppResult;
 use tui::Tui;
@@ -45,6 +47,9 @@ async fn main() -> ExitCode {
 async fn run() -> AppResult<()> {
     let args = Args::parse();
     let mut tui = Tui::new()?;
-    let mut app = App::new(args.flake);
+    let cancel_token = CancellationToken::new();
+    let nix: Arc<dyn NixPort> = Arc::new(service::NixService::new(cancel_token.clone()));
+    let git: Arc<dyn GitPort> = Arc::new(service::GitService::new(cancel_token.clone()));
+    let mut app = App::new_with_ports(args.flake, nix, git, cancel_token);
     app.run(&mut tui).await
 }

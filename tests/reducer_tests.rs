@@ -5,7 +5,7 @@ use melt::app::effects::Effect;
 use melt::app::reducer::{
     effects_for_action, effects_for_task_result, reduce, AppEvent, StatusCommand,
 };
-use melt::app::{Action, AppState, ChangelogState, ListState, TaskResult};
+use melt::app::{Action, AppState, ChangelogState, ListState, TaskError, TaskResult};
 use melt::model::{
     ChangelogData, Commit, FlakeData, FlakeInput, ForgeType, GitInput, PathInput, UpdateStatus,
 };
@@ -117,25 +117,24 @@ fn confirm_lock_in_changelog_state_plans_lock_effect() {
         locked_idx: None,
     };
     let parent_list = list_with_git_input("nixpkgs");
-    let state = AppState::Changelog(Box::new(ChangelogState::new(input, changelog, parent_list)));
+    let mut cs = ChangelogState::new(input, changelog, parent_list);
+    cs.show_confirm();
+    let state = AppState::Changelog(Box::new(cs));
 
-    let action = Action::ConfirmLock {
-        input_name: "nixpkgs".to_string(),
-        lock_url: "github:NixOS/nixpkgs/deadbeef".to_string(),
-    };
+    let action = Action::ConfirmLock;
 
     let effects = effects_for_action(&state, &action);
     assert_eq!(effects.len(), 1);
 
     match &effects[0] {
-        Effect::Lock {
-            path,
-            name,
-            lock_url,
-        } => {
-            assert_eq!(path, &PathBuf::from("/tmp/flake"));
-            assert_eq!(name, "nixpkgs");
-            assert_eq!(lock_url, "github:NixOS/nixpkgs/deadbeef");
+        Effect::Lock(lock_request) => {
+            assert_eq!(lock_request.path, PathBuf::from("/tmp/flake"));
+            assert_eq!(lock_request.name, "nixpkgs");
+            assert_eq!(lock_request.owner, "NixOS");
+            assert_eq!(lock_request.repo, "nixpkgs");
+            assert_eq!(lock_request.rev, "deadbeef");
+            assert_eq!(lock_request.forge_type, ForgeType::GitHub);
+            assert!(lock_request.host.is_none());
         }
         other => panic!("expected Lock effect, got {:?}", other),
     }
@@ -181,7 +180,7 @@ fn successful_update_task_result_plans_reload_effect() {
 fn failed_update_task_result_plans_no_follow_up_effects() {
     let result = TaskResult::UpdateComplete {
         effect_id: 7,
-        result: Err("boom".to_string()),
+        result: Err(TaskError::external("boom")),
     };
 
     let effects = effects_for_task_result(&result);

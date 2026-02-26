@@ -23,9 +23,9 @@ use tracing::{debug, warn};
 use crate::error::AppResult;
 use crate::event::poll_key;
 use crate::model::{FlakeInput, GitInput};
-use crate::service::{GitService, NixService};
+use crate::service::build_lock_url;
 
-use self::effects::Effect;
+use self::effects::{Effect, LockRequest};
 use self::ports::{ClockPort, GitPort, NixPort, StatusCallback, SystemClock};
 use self::reducer::{AppEvent, StatusCommand, Transition};
 use crate::tui::Tui;
@@ -33,7 +33,7 @@ use crate::ui::render;
 
 use self::state::EffectId;
 pub use handler::Action;
-pub use state::{AppState, ChangelogLoadedData, ChangelogState, ListState, TaskResult};
+pub use state::{AppState, ChangelogLoadedData, ChangelogState, ListState, TaskError, TaskResult};
 use status::StatusMessage;
 
 /// Main application struct
@@ -63,13 +63,6 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(flake_path: PathBuf) -> Self {
-        let cancel_token = CancellationToken::new();
-        let nix: Arc<dyn NixPort> = Arc::new(NixService::new(cancel_token.clone()));
-        let git: Arc<dyn GitPort> = Arc::new(GitService::new(cancel_token.clone()));
-        Self::new_with_ports(flake_path, nix, git, cancel_token)
-    }
-
     pub fn new_with_ports(
         flake_path: PathBuf,
         nix: Arc<dyn NixPort>,
@@ -194,11 +187,7 @@ impl App {
             Effect::LoadChangelog { input, parent_list } => {
                 self.spawn_load_changelog(effect_id, *input, *parent_list)
             }
-            Effect::Lock {
-                path,
-                name,
-                lock_url,
-            } => self.spawn_lock(effect_id, path, name, lock_url),
+            Effect::Lock(lock_request) => self.spawn_lock(effect_id, lock_request),
             Effect::CheckUpdates { inputs } => self.spawn_check_updates(effect_id, inputs),
         }
     }
@@ -242,11 +231,8 @@ impl App {
             Action::UpdateAll => {
                 debug!("Updating all inputs");
             }
-            Action::ConfirmLock {
-                input_name,
-                lock_url: _,
-            } => {
-                debug!(input = %input_name, "Locking to commit");
+            Action::ConfirmLock => {
+                debug!("Locking to commit");
             }
             _ => {}
         }
@@ -317,7 +303,10 @@ impl App {
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
-            let result = nix.load_metadata(&path).await.map_err(|e| e.to_string());
+            let result = nix
+                .load_metadata(&path)
+                .await
+                .map_err(|e| TaskError::from_message(e.to_string()));
             let _ = tx.send(TaskResult::FlakeLoaded { effect_id, result });
         });
     }
@@ -330,7 +319,7 @@ impl App {
             let result = nix
                 .update_inputs(&path, &names)
                 .await
-                .map_err(|e| e.to_string());
+                .map_err(|e| TaskError::from_message(e.to_string()));
             let _ = tx.send(TaskResult::UpdateComplete { effect_id, result });
         });
     }
@@ -340,7 +329,10 @@ impl App {
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
-            let result = nix.update_all(&path).await.map_err(|e| e.to_string());
+            let result = nix
+                .update_all(&path)
+                .await
+                .map_err(|e| TaskError::from_message(e.to_string()));
             let _ = tx.send(TaskResult::UpdateComplete { effect_id, result });
         });
     }
@@ -350,7 +342,10 @@ impl App {
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
-            let result = git.get_changelog(&input).await.map_err(|e| e.to_string());
+            let result = git
+                .get_changelog(&input)
+                .await
+                .map_err(|e| TaskError::from_message(e.to_string()));
             let _ = tx.send(TaskResult::ChangelogLoaded {
                 effect_id,
                 result: Box::new(result.map(|data| ChangelogLoadedData {
@@ -362,15 +357,29 @@ impl App {
         });
     }
 
-    fn spawn_lock(&self, effect_id: EffectId, path: PathBuf, name: String, lock_url: String) {
+    fn spawn_lock(&self, effect_id: EffectId, lock_request: LockRequest) {
         let nix = Arc::clone(&self.nix);
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
+            let Some(lock_url) = build_lock_url(
+                lock_request.forge_type,
+                &lock_request.owner,
+                &lock_request.repo,
+                &lock_request.rev,
+                lock_request.host.as_deref(),
+            ) else {
+                let result = Err(TaskError::external(
+                    "Cannot generate lock URL for this input".to_string(),
+                ));
+                let _ = tx.send(TaskResult::LockComplete { effect_id, result });
+                return;
+            };
+
             let result = nix
-                .lock_input(&path, &name, &lock_url)
+                .lock_input(&lock_request.path, &lock_request.name, &lock_url)
                 .await
-                .map_err(|e| e.to_string());
+                .map_err(|e| TaskError::from_message(e.to_string()));
             let _ = tx.send(TaskResult::LockComplete { effect_id, result });
         });
     }

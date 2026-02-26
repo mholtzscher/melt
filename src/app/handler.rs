@@ -6,7 +6,6 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::event::KeyEventExt;
 use crate::model::FlakeInput;
-use crate::service::build_lock_url;
 
 use super::state::{AppState, StateKind};
 
@@ -46,10 +45,7 @@ pub enum Action {
     /// Close changelog and return to list
     CloseChangelog,
     /// Confirm lock to commit
-    ConfirmLock {
-        input_name: String,
-        lock_url: String,
-    },
+    ConfirmLock,
     /// Show warning message
     ShowWarning(String),
 }
@@ -182,30 +178,10 @@ fn handle_confirm_key(cs: &super::state::ChangelogState, key: KeyEvent) -> Actio
                 Some(idx) => idx,
                 None => return Action::None,
             };
-            let commit = match cs.data.commits.get(commit_idx) {
-                Some(c) => c,
-                None => return Action::None,
-            };
-
-            let lock_url = match build_lock_url(
-                cs.input.forge_type,
-                &cs.input.owner,
-                &cs.input.repo,
-                &commit.sha,
-                cs.input.host.as_deref(),
-            ) {
-                Some(url) => url,
-                None => {
-                    return Action::ShowWarning(
-                        "Cannot generate lock URL for this input".to_string(),
-                    );
-                }
-            };
-
-            Action::ConfirmLock {
-                input_name: cs.input.name.clone(),
-                lock_url,
+            if cs.data.commits.get(commit_idx).is_none() {
+                return Action::None;
             }
+            Action::ConfirmLock
         }
         KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => Action::ChangelogHideConfirm,
         _ => Action::None,

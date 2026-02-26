@@ -1,8 +1,19 @@
 use std::path::PathBuf;
 
-use crate::model::{FlakeInput, GitInput};
+use crate::model::{FlakeInput, ForgeType, GitInput};
 
 use super::state::ListState;
+
+#[derive(Debug, Clone)]
+pub struct LockRequest {
+    pub path: PathBuf,
+    pub name: String,
+    pub owner: String,
+    pub repo: String,
+    pub rev: String,
+    pub forge_type: ForgeType,
+    pub host: Option<String>,
+}
 
 #[derive(Debug, Clone)]
 pub enum Effect {
@@ -18,11 +29,7 @@ pub enum Effect {
         input: Box<GitInput>,
         parent_list: Box<ListState>,
     },
-    Lock {
-        path: PathBuf,
-        name: String,
-        lock_url: String,
-    },
+    Lock(LockRequest),
     CheckUpdates {
         inputs: Vec<FlakeInput>,
     },

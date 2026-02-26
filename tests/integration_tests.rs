@@ -105,13 +105,7 @@ fn smoke_flow_load_update_changelog_and_lock() {
     let show_confirm = Action::ChangelogShowConfirm;
     let _ = reduce(&mut state, AppEvent::Action(&show_confirm));
 
-    let lock = Action::ConfirmLock {
-        input_name: "nixpkgs".to_string(),
-        lock_url: "github:NixOS/nixpkgs/deadbeef".to_string(),
-    };
+    let lock = Action::ConfirmLock;
     let transition = reduce(&mut state, AppEvent::Action(&lock));
-    assert!(matches!(
-        transition.effects.as_slice(),
-        [Effect::Lock { .. }]
-    ));
+    assert!(matches!(transition.effects.as_slice(), [Effect::Lock(_)]));
 }

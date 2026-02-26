@@ -40,3 +40,4 @@ result
 result-*
 
 node_modules/
+/.direnv

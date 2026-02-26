@@ -1,167 +1,84 @@
-# AGENTS.md - AI Agent Guidelines for melt-rs
+# PROJECT KNOWLEDGE BASE
 
-A terminal UI for managing Nix flake inputs, built with Rust and ratatui.
+**Generated:** 2026-02-26T08:10:46-06:00
+**Commit:** 59f274f
+**Branch:** main
 
-**Stack**: Rust 2021 (MSRV 1.75), tokio, ratatui, crossterm, git2, reqwest, serde, clap, thiserror
+## OVERVIEW
+Rust TUI for Nix flake input management. Core loop in `src/app`, external IO in `src/service`, rendering in `src/ui/render`, fixtures in `test-data`.
 
-## Rules
+## STRUCTURE
+```text
+./
+├── src/
+│   ├── main.rs            # binary entry
+│   ├── lib.rs             # public API + re-exports
+│   ├── app/               # runtime/state machine + action execution
+│   ├── service/           # nix CLI + forge API/git2 fallback integration
+│   ├── model/             # domain objects + display helpers
+│   ├── ui/render/         # list/changelog view rendering
+│   └── util/              # shared time formatting
+├── tests/                 # integration tests (parser mirror)
+├── test-data/             # flake fixtures used by tests
+└── .github/workflows/     # CI, release, dep update automation
+```
 
-**Never commit code unless explicitly prompted by the user.**
+## WHERE TO LOOK
+| Task | Location | Notes |
+|------|----------|-------|
+| Runtime loop | `src/app/mod.rs` | event poll, render, task result handling |
+| Key handling | `src/app/handler.rs` | state-aware key maps, returns `Action` |
+| State invariants | `src/app/state.rs` | `AppState`, `ListState`, `ChangelogState` |
+| Nix operations | `src/service/nix.rs` | `nix flake metadata/update`, timeout/cancel |
+| Forge/changelog | `src/service/git.rs` | API first, git2 fallback, concurrency limits |
+| Rendering | `src/ui/render/list.rs`, `src/ui/render/changelog.rs` | table layouts + status/help bars |
+| Domain mapping | `src/model/flake.rs`, `src/model/status.rs` | input model + status presentation |
+| Integration fixtures | `tests/integration_tests.rs`, `test-data/` | parser behavior + fixture coverage |
 
-## Commands
+## CODE MAP
+LSP unavailable in this environment. Use file-level map above and module re-exports in `src/lib.rs`.
 
-All commands should be run through Nix tooling. **Never commit code unless explicitly prompted by the user.**
+## CONVENTIONS
+- Nix-first tooling path: run Cargo via `nix develop` in local/CI flows.
+- Binary + library both declare module trees (`src/main.rs`, `src/lib.rs`); keep both in sync when adding modules.
+- App input flow: key event -> `Action` -> `App::execute_action`; avoid mutating state directly in key handlers.
+- Async guardrails: `CancellationToken`, `tokio::time::timeout`, semaphore-limited fan-out in git checks.
+- Theme discipline: colors live in `src/ui/theme.rs`; renderers use semantic constants only.
 
+## ANTI-PATTERNS (THIS PROJECT)
+- Never commit unless explicitly requested by user.
+- Do not bypass Nix tooling for regular build/test/lint commands.
+- Do not hardcode colors inside render functions.
+- Do not block tokio threads with git2 work; use `spawn_blocking` paths in service layer.
+- Avoid exposing parser internals only for tests; prefer crate API where possible.
+
+## UNIQUE STYLES
+- Two-stage state model for changelog: `LoadingChangelog(ListState)` then `Changelog(Box<...>)` with parent state restore.
+- Multi-forge strategy: GitHub/GitLab HTTP compare APIs, fallback to bare-repo git2 for generic/sourcehut/codeberg/gitea.
+- TUI status UX couples spinner frames + status messages in both list and help bars.
+- Release flow is Node semantic-release, but product build/test is Nix+Cargo.
+
+## COMMANDS
 ```bash
 # Build
-nix develop -c cargo build                    # dev build
-nix develop -c cargo build --release          # release (LTO + strip)
+nix develop -c cargo build
+nix develop -c cargo build --release
 
 # Test
-nix develop -c cargo test                     # all tests
-nix develop -c cargo test test_name           # single test
-nix develop -c cargo test module_name::       # module tests
-nix develop -c cargo test -- --nocapture      # with output
+nix develop -c cargo test
+nix develop -c cargo test test_name
+nix develop -c cargo test module_name::
 
-# Lint
-nix develop -c cargo fmt                      # format code
-nix develop -c cargo fmt -- --check           # check only
-nix develop -c cargo clippy                   # run lints
-nix develop -c cargo clippy --fix             # auto-fix
+# Lint/format
+nix develop -c cargo fmt -- --check
+nix develop -c cargo clippy --all-targets -- -D warnings
 
-# Build and run with Nix
-nix build                      # build package
-nix run                        # run directly
+# Nix package checks
+nix build
+nix flake check
 ```
 
-## Project Structure
-
-```
-src/
-  main.rs          # CLI entry, clap args
-  lib.rs           # Public API, re-exports
-  error.rs         # thiserror error types
-  config.rs        # Config structs with Default
-  event.rs         # Input handling
-  tui.rs           # Terminal RAII wrapper
-  app/             # Core: state.rs (state machine), handler.rs (actions)
-  model/           # Domain: flake.rs, commit.rs, status.rs
-  service/         # External: nix.rs, git.rs (APIs + git2 fallback)
-  ui/              # Rendering: theme.rs (Catppuccin), render/
-tests/             # Integration tests, fixtures in test-data/
-```
-
-## Code Style
-
-### Imports
-
-Order: std -> external crates (alphabetically) -> crate internal, separated by blank lines.
-
-### Types
-
-```rust
-#[derive(Debug, Clone)]           // minimum for most types
-#[derive(Debug, Clone, Copy)]     // small types without heap
-#[derive(Debug, Clone, PartialEq, Eq)]  // when equality needed
-
-#[derive(Debug, Clone, Default)]
-pub enum UpdateStatus {
-    #[default]
-    Unknown,
-    // ...
-}
-```
-
-### Error Handling
-
-```rust
-#[derive(Error, Debug)]
-pub enum AppError {
-    #[error("No flake.nix found in {0}")]
-    FlakeNotFound(PathBuf),
-    #[error("Git error: {0}")]
-    Git(#[from] GitError),
-}
-pub type AppResult<T> = Result<T, AppError>;
-```
-
-### Module Organization
-
-Keep `mod.rs` minimal - just declarations and re-exports:
-
-```rust
-mod commit;
-mod flake;
-pub use commit::{ChangelogData, Commit};
-pub use flake::{FlakeData, FlakeInput};
-```
-
-### Async Patterns
-
-- `tokio::spawn_blocking` for CPU-bound/blocking ops (git2)
-- `tokio::time::timeout` for timeouts
-- `CancellationToken` for cooperative cancellation
-- `Arc<Semaphore>` to limit concurrency
-
-### Serde
-
-```rust
-#[derive(Debug, Deserialize, Default)]
-#[allow(dead_code)]  // for unused JSON fields
-struct NixLocked {
-    #[serde(rename = "type", default)]
-    type_: Option<String>,
-}
-```
-
-### State Machine Pattern
-
-State is an enum; handlers return Action enums instead of mutating directly:
-
-```rust
-pub enum AppState { Loading, Error(String), List(ListState), ... }
-pub enum Action { None, Quit, UpdateSelected(Vec<String>), ... }
-```
-
-### Naming
-
-- Types: `PascalCase` (FlakeInput, GitService)
-- Functions: `snake_case` (check_updates, cursor_down)
-- Constants: `SCREAMING_SNAKE_CASE` (BG_HIGHLIGHT)
-- Acronyms as words: `Url` not `URL`
-
-### Documentation
-
-- `//!` for module docs, `///` for items
-- `#[cfg(test)]` for test modules in same file
-
-### UI/Theme
-
-- Colors in `ui/theme.rs` (Catppuccin Mocha)
-- Use semantic names: `SUCCESS`, `ERROR`, `TEXT_DIM`
-- No hardcoded colors in render functions
-
-### Testing
-
-- Unit tests in `#[cfg(test)]` module in same file
-- Integration tests in `tests/`
-- Fixtures in `test-data/`
-- Use `tempfile` for filesystem tests
-
-## Key Files Reference
-
-| File                 | Purpose                                  |
-| -------------------- | ---------------------------------------- |
-| `src/app/state.rs`   | AppState enum, ListState, ChangelogState |
-| `src/app/handler.rs` | Key handlers, Action enum                |
-| `src/service/git.rs` | API calls + git2 fallback for forges     |
-| `src/service/nix.rs` | `nix flake metadata/update` commands     |
-| `src/model/flake.rs` | FlakeInput, GitInput, ForgeType          |
-| `src/ui/theme.rs`    | Color constants (Catppuccin Mocha)       |
-
-## Environment Variables
-
-| Variable                    | Description                                  |
-| --------------------------- | -------------------------------------------- |
-| `GITHUB_TOKEN` / `GH_TOKEN` | GitHub API auth (increases rate limit)       |
-| `RUST_BACKTRACE`            | Set to `1` for backtraces (set in dev shell) |
+## NOTES
+- Release workflow uses `npm install` + `semantic-release`; keep `package-lock.json` healthy.
+- Nix package sets `doCheck = false`; canonical test signal is CI `cargo test` job.
+- `tests/integration_tests.rs` mirrors parser logic; drift risk exists when `src/service/nix.rs` parsing changes.

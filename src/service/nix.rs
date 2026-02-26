@@ -5,6 +5,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use tracing::{debug, warn};
 
+use crate::app::ports::{NixPort, PortFuture};
 use crate::config::ServiceConfig;
 use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
@@ -448,6 +449,33 @@ fn build_url(
             .or_else(|| original.and_then(|o| o.url.clone()))
             .unwrap_or_else(|| format!("git:{}/{}", owner, repo)),
         _ => "unknown".to_string(),
+    }
+}
+
+impl NixPort for NixService {
+    fn load_metadata<'a>(&'a self, path: &'a Path) -> PortFuture<'a, AppResult<FlakeData>> {
+        Box::pin(async move { self.load_metadata(path).await })
+    }
+
+    fn update_inputs<'a>(
+        &'a self,
+        path: &'a Path,
+        names: &'a [String],
+    ) -> PortFuture<'a, AppResult<()>> {
+        Box::pin(async move { self.update_inputs(path, names).await })
+    }
+
+    fn update_all<'a>(&'a self, path: &'a Path) -> PortFuture<'a, AppResult<()>> {
+        Box::pin(async move { self.update_all(path).await })
+    }
+
+    fn lock_input<'a>(
+        &'a self,
+        path: &'a Path,
+        name: &'a str,
+        override_url: &'a str,
+    ) -> PortFuture<'a, AppResult<()>> {
+        Box::pin(async move { self.lock_input(path, name, override_url).await })
     }
 }
 

@@ -18,7 +18,7 @@ pub struct StatusMessage {
 }
 
 impl StatusMessage {
-    /// Create a new info message
+    /// Create a new info message.
     pub fn info(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
@@ -27,35 +27,35 @@ impl StatusMessage {
         }
     }
 
-    /// Create a new success message that expires
-    pub fn success(text: impl Into<String>) -> Self {
+    /// Create a success message with explicit current time.
+    pub fn success_at(now: Instant, text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
             level: StatusLevel::Success,
-            expires: Some(Instant::now() + Duration::from_secs(3)),
+            expires: Some(now + Duration::from_secs(3)),
         }
     }
 
-    /// Create a new error message
-    pub fn error(text: impl Into<String>) -> Self {
+    /// Create an error message with explicit current time.
+    pub fn error_at(now: Instant, text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
             level: StatusLevel::Error,
-            expires: Some(Instant::now() + Duration::from_secs(5)),
+            expires: Some(now + Duration::from_secs(5)),
         }
     }
 
-    /// Create a new warning message
-    pub fn warning(text: impl Into<String>) -> Self {
+    /// Create a warning message with explicit current time.
+    pub fn warning_at(now: Instant, text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
             level: StatusLevel::Warning,
-            expires: Some(Instant::now() + Duration::from_secs(4)),
+            expires: Some(now + Duration::from_secs(4)),
         }
     }
 
-    /// Check if the message has expired
-    pub fn is_expired(&self) -> bool {
-        self.expires.map(|e| Instant::now() > e).unwrap_or(false)
+    /// Check if the message has expired at a given time.
+    pub fn is_expired_at(&self, now: Instant) -> bool {
+        self.expires.map(|e| now > e).unwrap_or(false)
     }
 }

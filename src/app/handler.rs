@@ -8,7 +8,7 @@ use crate::event::KeyEventExt;
 use crate::model::FlakeInput;
 use crate::service::build_lock_url;
 
-use super::state::{AppState, ChangelogState, ListState, StateKind};
+use super::state::{AppState, StateKind};
 
 /// Actions that can result from handling input
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,6 +19,22 @@ pub enum Action {
     Quit,
     /// Cancel current operation and quit
     CancelAndQuit,
+    /// Move list cursor down
+    ListCursorDown,
+    /// Move list cursor up
+    ListCursorUp,
+    /// Toggle list selection at cursor
+    ListToggleSelection,
+    /// Clear all list selections
+    ListClearSelection,
+    /// Move changelog cursor down
+    ChangelogCursorDown,
+    /// Move changelog cursor up
+    ChangelogCursorUp,
+    /// Show changelog lock confirmation dialog
+    ChangelogShowConfirm,
+    /// Hide changelog lock confirmation dialog
+    ChangelogHideConfirm,
     /// Update selected inputs
     UpdateSelected(Vec<String>),
     /// Update all inputs
@@ -38,7 +54,7 @@ pub enum Action {
     ShowWarning(String),
 }
 
-pub fn handle_key(state: &mut AppState, key: KeyEvent) -> Action {
+pub fn handle_key(state: &AppState, key: KeyEvent) -> Action {
     match state.kind() {
         StateKind::Loading | StateKind::LoadingChangelog => {
             if key.is_quit() {
@@ -57,7 +73,7 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> Action {
         }
         StateKind::Changelog => {
             if let AppState::Changelog(cs) = state {
-                handle_changelog_key(cs.as_mut(), key)
+                handle_changelog_key(cs, key)
             } else {
                 Action::None
             }
@@ -67,7 +83,7 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> Action {
 }
 
 /// Handle key events in list view
-fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
+fn handle_list_key(list: &super::state::ListState, key: KeyEvent) -> Action {
     let input_count = list.input_count();
     let has_selection = list.has_selection();
     let is_busy = list.busy;
@@ -82,25 +98,19 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
     match key.code {
         KeyCode::Char('q') | KeyCode::Esc => {
             if has_selection {
-                list.clear_selection();
-                Action::None
+                Action::ListClearSelection
             } else {
                 Action::Quit
             }
         }
-        KeyCode::Char('j') | KeyCode::Down => {
-            list.cursor_down();
-            Action::None
-        }
-        KeyCode::Char('k') | KeyCode::Up => {
-            list.cursor_up();
-            Action::None
-        }
+        KeyCode::Char('j') | KeyCode::Down => Action::ListCursorDown,
+        KeyCode::Char('k') | KeyCode::Up => Action::ListCursorUp,
         KeyCode::Char(' ') => {
-            if !is_busy {
-                list.toggle_selection();
+            if is_busy {
+                Action::None
+            } else {
+                Action::ListToggleSelection
             }
-            Action::None
         }
         KeyCode::Char('u') => {
             if is_busy {
@@ -114,7 +124,6 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
                 .collect();
 
             if !names.is_empty() {
-                list.busy = true;
                 Action::UpdateSelected(names)
             } else {
                 Action::ShowWarning("No inputs selected".to_string())
@@ -122,17 +131,17 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
         }
         KeyCode::Char('U') => {
             if is_busy {
-                return Action::None;
+                Action::None
+            } else {
+                Action::UpdateAll
             }
-            list.busy = true;
-            Action::UpdateAll
         }
         KeyCode::Char('r') => {
             if is_busy {
-                return Action::None;
+                Action::None
+            } else {
+                Action::Refresh
             }
-            list.busy = true;
-            Action::Refresh
         }
         KeyCode::Char('c') => {
             if is_busy {
@@ -150,7 +159,7 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
 }
 
 /// Handle key events in changelog view
-fn handle_changelog_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
+fn handle_changelog_key(cs: &super::state::ChangelogState, key: KeyEvent) -> Action {
     // Check if we're in confirm dialog
     if cs.is_confirming() {
         return handle_confirm_key(cs, key);
@@ -158,24 +167,15 @@ fn handle_changelog_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
 
     match key.code {
         KeyCode::Char('q') | KeyCode::Esc => Action::CloseChangelog,
-        KeyCode::Char('j') | KeyCode::Down => {
-            cs.cursor_down();
-            Action::None
-        }
-        KeyCode::Char('k') | KeyCode::Up => {
-            cs.cursor_up();
-            Action::None
-        }
-        KeyCode::Char(' ') => {
-            cs.show_confirm();
-            Action::None
-        }
+        KeyCode::Char('j') | KeyCode::Down => Action::ChangelogCursorDown,
+        KeyCode::Char('k') | KeyCode::Up => Action::ChangelogCursorUp,
+        KeyCode::Char(' ') => Action::ChangelogShowConfirm,
         _ => Action::None,
     }
 }
 
 /// Handle key events in confirm dialog
-fn handle_confirm_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
+fn handle_confirm_key(cs: &super::state::ChangelogState, key: KeyEvent) -> Action {
     match key.code {
         KeyCode::Char('y') => {
             let commit_idx = match cs.confirm_lock {
@@ -196,7 +196,6 @@ fn handle_confirm_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
             ) {
                 Some(url) => url,
                 None => {
-                    cs.hide_confirm();
                     return Action::ShowWarning(
                         "Cannot generate lock URL for this input".to_string(),
                     );
@@ -208,10 +207,7 @@ fn handle_confirm_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
                 lock_url,
             }
         }
-        KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {
-            cs.hide_confirm();
-            Action::None
-        }
+        KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => Action::ChangelogHideConfirm,
         _ => Action::None,
     }
 }

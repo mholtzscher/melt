@@ -5,7 +5,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::error::{AppError, GitError};
 use crate::model::{ChangelogData, FlakeData, GitInput, UpdateStatus};
 
 /// Application state machine
@@ -203,22 +202,22 @@ pub enum TaskResult {
     /// Flake metadata loaded
     FlakeLoaded {
         effect_id: EffectId,
-        result: Result<FlakeData, AppError>,
+        result: Result<FlakeData, String>,
     },
     /// Input update completed
     UpdateComplete {
         effect_id: EffectId,
-        result: Result<(), AppError>,
+        result: Result<(), String>,
     },
     /// Changelog loaded
     ChangelogLoaded {
         effect_id: EffectId,
-        result: Box<Result<ChangelogLoadedData, GitError>>,
+        result: Box<Result<ChangelogLoadedData, String>>,
     },
     /// Lock completed
     LockComplete {
         effect_id: EffectId,
-        result: Result<(), AppError>,
+        result: Result<(), String>,
     },
     /// Status update for a single input
     InputStatus {

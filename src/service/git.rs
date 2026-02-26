@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use super::policy::build_clone_url;
+use crate::app::ports::{GitPort, PortFuture, StatusCallback};
 use crate::config::ServiceConfig;
 use crate::error::GitError;
 use crate::model::{ChangelogData, Commit, FlakeInput, ForgeType, GitInput, UpdateStatus};
@@ -793,6 +794,26 @@ fn commit_to_model(commit: &git2::Commit) -> Commit {
         author,
         date,
         is_locked: false,
+    }
+}
+
+impl GitPort for GitService {
+    fn get_changelog<'a>(
+        &'a self,
+        input: &'a GitInput,
+    ) -> PortFuture<'a, Result<ChangelogData, GitError>> {
+        Box::pin(async move { self.get_changelog(input).await })
+    }
+
+    fn check_updates<'a>(
+        &'a self,
+        inputs: &'a [FlakeInput],
+        mut on_status: StatusCallback<'a>,
+    ) -> PortFuture<'a, Result<(), GitError>> {
+        Box::pin(async move {
+            self.check_updates(inputs, move |name, status| on_status(name, status))
+                .await
+        })
     }
 }
 

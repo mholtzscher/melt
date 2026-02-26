@@ -52,6 +52,14 @@ pub fn effects_for_action(state: &AppState, action: &Action) -> Vec<Effect> {
         Action::None
         | Action::Quit
         | Action::CancelAndQuit
+        | Action::ListCursorDown
+        | Action::ListCursorUp
+        | Action::ListToggleSelection
+        | Action::ListClearSelection
+        | Action::ChangelogCursorDown
+        | Action::ChangelogCursorUp
+        | Action::ChangelogShowConfirm
+        | Action::ChangelogHideConfirm
         | Action::CloseChangelog
         | Action::ShowWarning(_) => Vec::new(),
         Action::UpdateSelected(names) => match state {
@@ -115,6 +123,46 @@ fn reduce_action(state: &mut AppState, action: &Action) -> Transition {
 
     match action {
         Action::None => {}
+        Action::ListCursorDown => {
+            if let AppState::List(list) = state {
+                list.cursor_down();
+            }
+        }
+        Action::ListCursorUp => {
+            if let AppState::List(list) = state {
+                list.cursor_up();
+            }
+        }
+        Action::ListToggleSelection => {
+            if let AppState::List(list) = state {
+                list.toggle_selection();
+            }
+        }
+        Action::ListClearSelection => {
+            if let AppState::List(list) = state {
+                list.clear_selection();
+            }
+        }
+        Action::ChangelogCursorDown => {
+            if let AppState::Changelog(cs) = state {
+                cs.cursor_down();
+            }
+        }
+        Action::ChangelogCursorUp => {
+            if let AppState::Changelog(cs) = state {
+                cs.cursor_up();
+            }
+        }
+        Action::ChangelogShowConfirm => {
+            if let AppState::Changelog(cs) = state {
+                cs.show_confirm();
+            }
+        }
+        Action::ChangelogHideConfirm => {
+            if let AppState::Changelog(cs) = state {
+                cs.hide_confirm();
+            }
+        }
         Action::Quit | Action::CancelAndQuit => {
             *state = AppState::Quitting;
             transition.cancel_requested = true;
@@ -123,6 +171,7 @@ fn reduce_action(state: &mut AppState, action: &Action) -> Transition {
             transition.status =
                 StatusCommand::Info(format!("Updating {} input(s)...", names.len()));
             if let AppState::List(list) = state {
+                list.busy = true;
                 for name in names {
                     list.update_statuses
                         .insert(name.clone(), UpdateStatus::Updating);
@@ -132,6 +181,7 @@ fn reduce_action(state: &mut AppState, action: &Action) -> Transition {
         Action::UpdateAll => {
             transition.status = StatusCommand::Info("Updating all inputs...".to_string());
             if let AppState::List(list) = state {
+                list.busy = true;
                 for input in &list.flake.inputs {
                     list.update_statuses
                         .insert(input.name().to_string(), UpdateStatus::Updating);
@@ -140,6 +190,9 @@ fn reduce_action(state: &mut AppState, action: &Action) -> Transition {
         }
         Action::Refresh => {
             transition.status = StatusCommand::Info("Refreshing...".to_string());
+            if let AppState::List(list) = state {
+                list.busy = true;
+            }
         }
         Action::OpenChangelog { .. } => {
             if let Some(Effect::LoadChangelog { parent_list, .. }) = transition.effects.first() {
@@ -163,6 +216,11 @@ fn reduce_action(state: &mut AppState, action: &Action) -> Transition {
         }
         Action::ShowWarning(msg) => {
             transition.status = StatusCommand::Warning(msg.clone());
+            if let AppState::Changelog(cs) = state {
+                if cs.is_confirming() {
+                    cs.hide_confirm();
+                }
+            }
         }
     }
 

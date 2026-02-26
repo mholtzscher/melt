@@ -26,7 +26,7 @@ use crate::model::{FlakeInput, GitInput};
 use crate::service::{GitService, NixService};
 
 use self::effects::Effect;
-use self::ports::{GitPort, NixPort, StatusCallback};
+use self::ports::{ClockPort, GitPort, NixPort, StatusCallback, SystemClock};
 use self::reducer::{AppEvent, StatusCommand, Transition};
 use crate::tui::Tui;
 use crate::ui::render;
@@ -48,6 +48,8 @@ pub struct App {
     git: Arc<dyn GitPort>,
     /// Cancellation token for async operations
     cancel_token: CancellationToken,
+    /// Clock port for runtime time checks
+    clock: Arc<dyn ClockPort>,
     /// Status message to display
     status_message: Option<StatusMessage>,
     /// Tick count for animations
@@ -74,6 +76,17 @@ impl App {
         git: Arc<dyn GitPort>,
         cancel_token: CancellationToken,
     ) -> Self {
+        let clock: Arc<dyn ClockPort> = Arc::new(SystemClock);
+        Self::new_with_ports_and_clock(flake_path, nix, git, clock, cancel_token)
+    }
+
+    pub fn new_with_ports_and_clock(
+        flake_path: PathBuf,
+        nix: Arc<dyn NixPort>,
+        git: Arc<dyn GitPort>,
+        clock: Arc<dyn ClockPort>,
+        cancel_token: CancellationToken,
+    ) -> Self {
         let (task_tx, task_rx) = mpsc::unbounded_channel();
         Self {
             flake_path,
@@ -81,6 +94,7 @@ impl App {
             nix,
             git,
             cancel_token,
+            clock,
             status_message: None,
             tick_count: 0,
             task_rx,
@@ -116,7 +130,7 @@ impl App {
             self.tick_count = self.tick_count.wrapping_add(1);
 
             if let Some(ref msg) = self.status_message {
-                if msg.is_expired() {
+                if msg.is_expired_at(self.clock.now()) {
                     self.status_message = None;
                 }
             }
@@ -149,7 +163,7 @@ impl App {
 
     /// Handle a key event
     fn handle_key(&mut self, key: crossterm::event::KeyEvent) {
-        let action = handler::handle_key(&mut self.state, key);
+        let action = handler::handle_key(&self.state, key);
         self.execute_action(action);
     }
 
@@ -208,9 +222,15 @@ impl App {
             StatusCommand::Keep => {}
             StatusCommand::Clear => self.status_message = None,
             StatusCommand::Info(msg) => self.status_message = Some(StatusMessage::info(msg)),
-            StatusCommand::Success(msg) => self.status_message = Some(StatusMessage::success(msg)),
-            StatusCommand::Warning(msg) => self.status_message = Some(StatusMessage::warning(msg)),
-            StatusCommand::Error(msg) => self.status_message = Some(StatusMessage::error(msg)),
+            StatusCommand::Success(msg) => {
+                self.status_message = Some(StatusMessage::success_at(self.clock.now(), msg));
+            }
+            StatusCommand::Warning(msg) => {
+                self.status_message = Some(StatusMessage::warning_at(self.clock.now(), msg));
+            }
+            StatusCommand::Error(msg) => {
+                self.status_message = Some(StatusMessage::error_at(self.clock.now(), msg));
+            }
         }
     }
 
@@ -297,7 +317,7 @@ impl App {
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
-            let result = nix.load_metadata(&path).await;
+            let result = nix.load_metadata(&path).await.map_err(|e| e.to_string());
             let _ = tx.send(TaskResult::FlakeLoaded { effect_id, result });
         });
     }
@@ -307,7 +327,10 @@ impl App {
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
-            let result = nix.update_inputs(&path, &names).await;
+            let result = nix
+                .update_inputs(&path, &names)
+                .await
+                .map_err(|e| e.to_string());
             let _ = tx.send(TaskResult::UpdateComplete { effect_id, result });
         });
     }
@@ -317,7 +340,7 @@ impl App {
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
-            let result = nix.update_all(&path).await;
+            let result = nix.update_all(&path).await.map_err(|e| e.to_string());
             let _ = tx.send(TaskResult::UpdateComplete { effect_id, result });
         });
     }
@@ -327,7 +350,7 @@ impl App {
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
-            let result = git.get_changelog(&input).await;
+            let result = git.get_changelog(&input).await.map_err(|e| e.to_string());
             let _ = tx.send(TaskResult::ChangelogLoaded {
                 effect_id,
                 result: Box::new(result.map(|data| ChangelogLoadedData {
@@ -344,7 +367,10 @@ impl App {
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
-            let result = nix.lock_input(&path, &name, &lock_url).await;
+            let result = nix
+                .lock_input(&path, &name, &lock_url)
+                .await
+                .map_err(|e| e.to_string());
             let _ = tx.send(TaskResult::LockComplete { effect_id, result });
         });
     }

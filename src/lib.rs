@@ -43,6 +43,7 @@ pub mod error;
 pub mod event;
 pub mod logging;
 pub mod model;
+pub mod policy;
 pub mod service;
 pub mod tui;
 pub mod ui;

@@ -4,6 +4,7 @@ mod error;
 mod event;
 mod logging;
 mod model;
+mod policy;
 mod service;
 mod tui;
 mod ui;

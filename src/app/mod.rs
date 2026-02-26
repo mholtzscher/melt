@@ -23,7 +23,7 @@ use tracing::{debug, warn};
 use crate::error::AppResult;
 use crate::event::poll_key;
 use crate::model::{FlakeInput, GitInput};
-use crate::service::build_lock_url;
+use crate::policy::build_lock_url;
 
 use self::effects::{Effect, LockRequest};
 use self::ports::{ClockPort, GitPort, NixPort, StatusCallback, SystemClock};

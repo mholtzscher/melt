@@ -10,11 +10,11 @@ use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
-use super::policy::build_clone_url;
 use crate::app::ports::{GitPort, PortFuture, StatusCallback};
 use crate::config::ServiceConfig;
 use crate::error::GitError;
 use crate::model::{ChangelogData, Commit, FlakeInput, ForgeType, GitInput, UpdateStatus};
+use crate::policy::build_clone_url;
 
 /// Service for git operations - uses APIs where possible, falls back to git2
 #[derive(Clone)]

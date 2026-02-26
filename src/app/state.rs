@@ -194,17 +194,36 @@ pub struct ChangelogLoadedData {
     pub parent_list: ListState,
 }
 
+/// Effect correlation id for async task completion.
+pub type EffectId = u64;
+
 /// Messages from background tasks
 #[derive(Debug)]
 pub enum TaskResult {
     /// Flake metadata loaded
-    FlakeLoaded(Result<FlakeData, AppError>),
+    FlakeLoaded {
+        effect_id: EffectId,
+        result: Result<FlakeData, AppError>,
+    },
     /// Input update completed
-    UpdateComplete(Result<(), AppError>),
+    UpdateComplete {
+        effect_id: EffectId,
+        result: Result<(), AppError>,
+    },
     /// Changelog loaded
-    ChangelogLoaded(Box<Result<ChangelogLoadedData, GitError>>),
+    ChangelogLoaded {
+        effect_id: EffectId,
+        result: Box<Result<ChangelogLoadedData, GitError>>,
+    },
     /// Lock completed
-    LockComplete(Result<(), AppError>),
+    LockComplete {
+        effect_id: EffectId,
+        result: Result<(), AppError>,
+    },
     /// Status update for a single input
-    InputStatus { name: String, status: UpdateStatus },
+    InputStatus {
+        effect_id: EffectId,
+        name: String,
+        status: UpdateStatus,
+    },
 }

@@ -4,6 +4,20 @@ use super::effects::Effect;
 use super::state::TaskResult;
 use super::{Action, AppState};
 
+pub enum AppEvent<'a> {
+    Action(&'a Action),
+    TaskResult(&'a TaskResult),
+    Tick,
+}
+
+pub fn effects_for_event(state: &AppState, event: AppEvent<'_>) -> Vec<Effect> {
+    match event {
+        AppEvent::Action(action) => effects_for_action(state, action),
+        AppEvent::TaskResult(result) => effects_for_task_result(result),
+        AppEvent::Tick => Vec::new(),
+    }
+}
+
 pub fn effects_for_action(state: &AppState, action: &Action) -> Vec<Effect> {
     match action {
         Action::None
@@ -56,12 +70,13 @@ pub fn effects_for_action(state: &AppState, action: &Action) -> Vec<Effect> {
 
 pub fn effects_for_task_result(result: &TaskResult) -> Vec<Effect> {
     match result {
-        TaskResult::FlakeLoaded(Ok(flake)) => vec![Effect::CheckUpdates {
+        TaskResult::FlakeLoaded {
+            result: Ok(flake), ..
+        } => vec![Effect::CheckUpdates {
             inputs: flake.inputs.clone(),
         }],
-        TaskResult::UpdateComplete(Ok(())) | TaskResult::LockComplete(Ok(())) => {
-            vec![Effect::LoadFlake]
-        }
+        TaskResult::UpdateComplete { result: Ok(()), .. }
+        | TaskResult::LockComplete { result: Ok(()), .. } => vec![Effect::LoadFlake],
         _ => Vec::new(),
     }
 }

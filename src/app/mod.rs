@@ -27,9 +27,11 @@ use crate::service::{GitService, NixService};
 
 use self::effects::Effect;
 use self::ports::{GitPort, NixPort, StatusCallback};
+use self::reducer::AppEvent;
 use crate::tui::Tui;
 use crate::ui::render;
 
+use self::state::EffectId;
 pub use handler::Action;
 pub use state::{AppState, ChangelogLoadedData, ChangelogState, ListState, TaskResult};
 use status::StatusMessage;
@@ -54,6 +56,8 @@ pub struct App {
     task_rx: mpsc::UnboundedReceiver<TaskResult>,
     /// Channel for sending task results
     task_tx: mpsc::UnboundedSender<TaskResult>,
+    /// Monotonic effect id counter
+    next_effect_id: EffectId,
 }
 
 impl App {
@@ -81,11 +85,12 @@ impl App {
             tick_count: 0,
             task_rx,
             task_tx,
+            next_effect_id: 1,
         }
     }
 
     pub async fn run(&mut self, tui: &mut Tui) -> AppResult<()> {
-        self.run_effect(Effect::LoadFlake);
+        self.dispatch_effects(vec![Effect::LoadFlake]);
 
         loop {
             if matches!(self.state, AppState::Quitting) {
@@ -106,6 +111,8 @@ impl App {
                 self.handle_task_result(result);
             }
 
+            let tick_effects = reducer::effects_for_event(&self.state, AppEvent::Tick);
+            self.dispatch_effects(tick_effects);
             self.tick_count = self.tick_count.wrapping_add(1);
 
             if let Some(ref msg) = self.status_message {
@@ -147,7 +154,7 @@ impl App {
     }
 
     async fn execute_action(&mut self, action: Action) {
-        let effects = reducer::effects_for_action(&self.state, &action);
+        let effects = reducer::effects_for_event(&self.state, AppEvent::Action(&action));
 
         match action {
             Action::None => {}
@@ -215,33 +222,48 @@ impl App {
             }
         }
 
+        self.dispatch_effects(effects);
+    }
+
+    fn next_effect_id(&mut self) -> EffectId {
+        let id = self.next_effect_id;
+        self.next_effect_id = self.next_effect_id.wrapping_add(1);
+        id
+    }
+
+    fn dispatch_effects(&mut self, effects: Vec<Effect>) {
         for effect in effects {
-            self.run_effect(effect);
+            let effect_id = self.next_effect_id();
+            self.run_effect(effect_id, effect);
         }
     }
 
-    fn run_effect(&self, effect: Effect) {
+    fn run_effect(&self, effect_id: EffectId, effect: Effect) {
         match effect {
-            Effect::LoadFlake => self.spawn_load_flake(),
-            Effect::Update { path, names } => self.spawn_update(path, names),
-            Effect::UpdateAll { path } => self.spawn_update_all(path),
+            Effect::LoadFlake => self.spawn_load_flake(effect_id),
+            Effect::Update { path, names } => self.spawn_update(effect_id, path, names),
+            Effect::UpdateAll { path } => self.spawn_update_all(effect_id, path),
             Effect::LoadChangelog { input, parent_list } => {
-                self.spawn_load_changelog(*input, *parent_list)
+                self.spawn_load_changelog(effect_id, *input, *parent_list)
             }
             Effect::Lock {
                 path,
                 name,
                 lock_url,
-            } => self.spawn_lock(path, name, lock_url),
-            Effect::CheckUpdates { inputs } => self.spawn_check_updates(inputs),
+            } => self.spawn_lock(effect_id, path, name, lock_url),
+            Effect::CheckUpdates { inputs } => self.spawn_check_updates(effect_id, inputs),
         }
     }
 
     fn handle_task_result(&mut self, result: TaskResult) {
-        let effects = reducer::effects_for_task_result(&result);
+        let effects = reducer::effects_for_event(&self.state, AppEvent::TaskResult(&result));
 
         match result {
-            TaskResult::FlakeLoaded(Ok(flake)) => {
+            TaskResult::FlakeLoaded {
+                effect_id,
+                result: Ok(flake),
+            } => {
+                debug!(effect_id, "flake loaded");
                 if let AppState::List(list) = &mut self.state {
                     list.update_flake(flake);
                 } else {
@@ -249,11 +271,19 @@ impl App {
                 }
                 self.status_message = None;
             }
-            TaskResult::FlakeLoaded(Err(e)) => {
+            TaskResult::FlakeLoaded {
+                effect_id,
+                result: Err(e),
+            } => {
+                debug!(effect_id, "flake load failed");
                 warn!(error = %e, "Failed to load flake");
                 self.state = AppState::Error(format!("Failed to load flake: {}", e));
             }
-            TaskResult::UpdateComplete(Ok(())) => {
+            TaskResult::UpdateComplete {
+                effect_id,
+                result: Ok(()),
+            } => {
+                debug!(effect_id, "update complete");
                 self.status_message = Some(StatusMessage::success("Update complete"));
                 if let AppState::List(list) = &mut self.state {
                     list.clear_selection();
@@ -261,7 +291,11 @@ impl App {
                         .retain(|_, status| !matches!(status, UpdateStatus::Updating));
                 }
             }
-            TaskResult::UpdateComplete(Err(e)) => {
+            TaskResult::UpdateComplete {
+                effect_id,
+                result: Err(e),
+            } => {
+                debug!(effect_id, "update failed");
                 warn!(error = %e, "Update failed");
                 self.status_message = Some(StatusMessage::error(format!("Update failed: {}", e)));
                 if let AppState::List(list) = &mut self.state {
@@ -270,29 +304,36 @@ impl App {
                         .retain(|_, status| !matches!(status, UpdateStatus::Updating));
                 }
             }
-            TaskResult::ChangelogLoaded(result) => match *result {
-                Ok(data) => {
-                    self.state = AppState::Changelog(Box::new(ChangelogState::new(
-                        data.input,
-                        data.data,
-                        data.parent_list,
-                    )));
-                    self.status_message = None;
-                }
-                Err(e) => {
-                    warn!(error = %e, "Failed to load changelog");
-                    self.status_message = Some(StatusMessage::error(format!(
-                        "Failed to load changelog: {}",
-                        e
-                    )));
-                    if let AppState::LoadingChangelog(list) =
-                        std::mem::replace(&mut self.state, AppState::Loading)
-                    {
-                        self.state = AppState::List(list);
+            TaskResult::ChangelogLoaded { effect_id, result } => {
+                debug!(effect_id, "changelog loaded result");
+                match *result {
+                    Ok(data) => {
+                        self.state = AppState::Changelog(Box::new(ChangelogState::new(
+                            data.input,
+                            data.data,
+                            data.parent_list,
+                        )));
+                        self.status_message = None;
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "Failed to load changelog");
+                        self.status_message = Some(StatusMessage::error(format!(
+                            "Failed to load changelog: {}",
+                            e
+                        )));
+                        if let AppState::LoadingChangelog(list) =
+                            std::mem::replace(&mut self.state, AppState::Loading)
+                        {
+                            self.state = AppState::List(list);
+                        }
                     }
                 }
-            },
-            TaskResult::LockComplete(Ok(())) => {
+            }
+            TaskResult::LockComplete {
+                effect_id,
+                result: Ok(()),
+            } => {
+                debug!(effect_id, "lock complete");
                 self.status_message = Some(StatusMessage::success("Locked successfully"));
                 if let AppState::Changelog(cs) =
                     std::mem::replace(&mut self.state, AppState::Loading)
@@ -302,89 +343,98 @@ impl App {
                     self.state = AppState::List(list);
                 }
             }
-            TaskResult::LockComplete(Err(e)) => {
+            TaskResult::LockComplete {
+                effect_id,
+                result: Err(e),
+            } => {
+                debug!(effect_id, "lock failed");
                 warn!(error = %e, "Lock failed");
                 self.status_message = Some(StatusMessage::error(format!("Lock failed: {}", e)));
                 if let AppState::Changelog(cs) = &mut self.state {
                     cs.hide_confirm();
                 }
             }
-            TaskResult::InputStatus { name, status } => {
+            TaskResult::InputStatus {
+                effect_id,
+                name,
+                status,
+            } => {
+                debug!(effect_id, "input status update");
                 if let AppState::List(list) = &mut self.state {
                     list.update_statuses.insert(name, status);
                 }
             }
         }
 
-        for effect in effects {
-            self.run_effect(effect);
-        }
+        self.dispatch_effects(effects);
     }
 
-    fn spawn_load_flake(&self) {
+    fn spawn_load_flake(&self, effect_id: EffectId) {
         let nix = Arc::clone(&self.nix);
         let path = self.flake_path.clone();
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
             let result = nix.load_metadata(&path).await;
-            let _ = tx.send(TaskResult::FlakeLoaded(result));
+            let _ = tx.send(TaskResult::FlakeLoaded { effect_id, result });
         });
     }
 
-    fn spawn_update(&self, path: PathBuf, names: Vec<String>) {
+    fn spawn_update(&self, effect_id: EffectId, path: PathBuf, names: Vec<String>) {
         let nix = Arc::clone(&self.nix);
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
             let result = nix.update_inputs(&path, &names).await;
-            let _ = tx.send(TaskResult::UpdateComplete(result));
+            let _ = tx.send(TaskResult::UpdateComplete { effect_id, result });
         });
     }
 
-    fn spawn_update_all(&self, path: PathBuf) {
+    fn spawn_update_all(&self, effect_id: EffectId, path: PathBuf) {
         let nix = Arc::clone(&self.nix);
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
             let result = nix.update_all(&path).await;
-            let _ = tx.send(TaskResult::UpdateComplete(result));
+            let _ = tx.send(TaskResult::UpdateComplete { effect_id, result });
         });
     }
 
-    fn spawn_load_changelog(&self, input: GitInput, parent_list: ListState) {
+    fn spawn_load_changelog(&self, effect_id: EffectId, input: GitInput, parent_list: ListState) {
         let git = Arc::clone(&self.git);
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
             let result = git.get_changelog(&input).await;
-            let _ = tx.send(TaskResult::ChangelogLoaded(Box::new(result.map(|data| {
-                ChangelogLoadedData {
+            let _ = tx.send(TaskResult::ChangelogLoaded {
+                effect_id,
+                result: Box::new(result.map(|data| ChangelogLoadedData {
                     input,
                     data,
                     parent_list,
-                }
-            }))));
+                })),
+            });
         });
     }
 
-    fn spawn_lock(&self, path: PathBuf, name: String, lock_url: String) {
+    fn spawn_lock(&self, effect_id: EffectId, path: PathBuf, name: String, lock_url: String) {
         let nix = Arc::clone(&self.nix);
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
             let result = nix.lock_input(&path, &name, &lock_url).await;
-            let _ = tx.send(TaskResult::LockComplete(result));
+            let _ = tx.send(TaskResult::LockComplete { effect_id, result });
         });
     }
 
-    fn spawn_check_updates(&self, inputs: Vec<FlakeInput>) {
+    fn spawn_check_updates(&self, effect_id: EffectId, inputs: Vec<FlakeInput>) {
         let git = Arc::clone(&self.git);
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
             let callback: StatusCallback<'_> = Box::new(move |name, status| {
                 let _ = tx.send(TaskResult::InputStatus {
+                    effect_id,
                     name: name.to_string(),
                     status,
                 });

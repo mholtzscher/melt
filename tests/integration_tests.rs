@@ -4,9 +4,12 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 use melt::app::effects::Effect;
-use melt::app::reducer::effects_for_action;
-use melt::app::{Action, AppState, ChangelogState, ListState};
+use melt::app::reducer::{
+    effects_for_action, effects_for_event, effects_for_task_result, AppEvent,
+};
+use melt::app::{Action, AppState, ChangelogState, ListState, TaskResult};
 use melt::model::{ChangelogData, Commit, FlakeData, FlakeInput, ForgeType, GitInput, PathInput};
+use melt::AppError;
 
 fn sample_git_input(name: &str) -> GitInput {
     GitInput {
@@ -197,4 +200,61 @@ fn changelog_confirm_only_when_commits_exist() {
     );
     non_empty.show_confirm();
     assert_eq!(non_empty.confirm_lock, Some(0));
+}
+
+#[test]
+fn flake_loaded_task_result_plans_check_updates_effect() {
+    let flake = sample_flake(vec![FlakeInput::Git(sample_git_input("nixpkgs"))]);
+    let result = TaskResult::FlakeLoaded {
+        effect_id: 42,
+        result: Ok(flake),
+    };
+
+    let effects = effects_for_task_result(&result);
+    assert_eq!(effects.len(), 1);
+
+    match &effects[0] {
+        Effect::CheckUpdates { inputs } => assert_eq!(inputs.len(), 1),
+        other => panic!("expected CheckUpdates effect, got {:?}", other),
+    }
+}
+
+#[test]
+fn successful_update_task_result_plans_reload_effect() {
+    let result = TaskResult::UpdateComplete {
+        effect_id: 7,
+        result: Ok(()),
+    };
+
+    let effects = effects_for_task_result(&result);
+    assert!(matches!(effects.as_slice(), [Effect::LoadFlake]));
+}
+
+#[test]
+fn failed_update_task_result_plans_no_follow_up_effects() {
+    let result = TaskResult::UpdateComplete {
+        effect_id: 7,
+        result: Err(AppError::NixCommandFailed("boom".to_string())),
+    };
+
+    let effects = effects_for_task_result(&result);
+    assert!(effects.is_empty());
+}
+
+#[test]
+fn event_planner_handles_action_and_task_result_events() {
+    let state = AppState::Loading;
+
+    let action_effects = effects_for_event(&state, AppEvent::Action(&Action::Refresh));
+    assert!(matches!(action_effects.as_slice(), [Effect::LoadFlake]));
+
+    let result = TaskResult::UpdateComplete {
+        effect_id: 1,
+        result: Ok(()),
+    };
+    let task_effects = effects_for_event(&state, AppEvent::TaskResult(&result));
+    assert!(matches!(task_effects.as_slice(), [Effect::LoadFlake]));
+
+    let tick_effects = effects_for_event(&state, AppEvent::Tick);
+    assert!(tick_effects.is_empty());
 }

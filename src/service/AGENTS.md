@@ -10,10 +10,10 @@
 | Nix metadata load | `src/service/nix.rs` | `load_metadata` + JSON parse pipeline |
 | Nix update/lock | `src/service/nix.rs` | `update_inputs`, `update_all`, `lock_input` |
 | Nix process safety | `src/service/nix.rs` | timeout + cancellation + stderr mapping |
-| Update checks | `src/service/git.rs` | concurrent fan-out with semaphore |
-| API-first per forge | `src/service/git.rs` | GitHub/GitLab compare endpoints |
-| git2 fallback | `src/service/git.rs` | bare clone cache, fetch, revwalk logic |
-| Changelog load | `src/service/git.rs` | API commits first, fallback to local history |
+| Update checks | `src/service/git/mod.rs` | concurrent fan-out with semaphore |
+| API-first per forge | `src/service/git/github.rs`, `src/service/git/gitlab.rs` | compare/commits endpoints |
+| git2 fallback | `src/service/git/fallback.rs` | bare clone cache, fetch, revwalk logic |
+| Changelog load | `src/service/git/mod.rs` | API first, fallback to git2 |
 
 ## CONVENTIONS
 - Treat service methods as IO boundaries: inputs validated at edge, typed models returned.

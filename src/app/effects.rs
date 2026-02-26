@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::model::{FlakeInput, ForgeType, GitInput};
+use crate::model::{ForgeType, GitInput};
 
 use super::state::ListState;
 
@@ -31,6 +31,6 @@ pub enum Effect {
     },
     Lock(LockRequest),
     CheckUpdates {
-        inputs: Vec<FlakeInput>,
+        inputs: Vec<GitInput>,
     },
 }

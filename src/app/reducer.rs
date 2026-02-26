@@ -119,7 +119,14 @@ pub fn effects_for_task_result(result: &TaskResult) -> Vec<Effect> {
         TaskResult::FlakeLoaded {
             result: Ok(flake), ..
         } => vec![Effect::CheckUpdates {
-            inputs: flake.inputs.clone(),
+            inputs: flake
+                .inputs
+                .iter()
+                .filter_map(|i| match i {
+                    FlakeInput::Git(g) => Some(g.clone()),
+                    _ => None,
+                })
+                .collect(),
         }],
         TaskResult::UpdateComplete { result: Ok(()), .. }
         | TaskResult::LockComplete { result: Ok(()), .. } => vec![Effect::LoadFlake],

@@ -4,7 +4,7 @@ use std::pin::Pin;
 use std::time::Instant;
 
 use crate::error::{AppResult, GitError};
-use crate::model::{ChangelogData, FlakeData, FlakeInput, GitInput, UpdateStatus};
+use crate::model::{ChangelogData, FlakeData, GitInput, UpdateStatus};
 
 pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub type StatusCallback<'a> = Box<dyn FnMut(&str, UpdateStatus) + Send + 'a>;
@@ -32,7 +32,7 @@ pub trait GitPort: Send + Sync {
     ) -> PortFuture<'a, Result<ChangelogData, GitError>>;
     fn check_updates<'a>(
         &'a self,
-        inputs: &'a [FlakeInput],
+        inputs: &'a [GitInput],
         on_status: StatusCallback<'a>,
     ) -> PortFuture<'a, Result<(), GitError>>;
 }

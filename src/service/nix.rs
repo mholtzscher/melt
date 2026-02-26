@@ -11,7 +11,7 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
-use crate::model::{FlakeData, FlakeInput, ForgeType, GitInput, OtherInput, PathInput};
+use crate::model::{FlakeData, FlakeInput, FlakeUrl, ForgeType, GitInput, OtherInput, PathInput};
 
 /// Service for interacting with Nix flakes
 #[derive(Clone)]
@@ -255,61 +255,6 @@ fn parse_metadata(path: PathBuf, metadata: NixFlakeMetadata) -> FlakeData {
     FlakeData { path, inputs }
 }
 
-/// Parse owner and repo from a git URL
-fn parse_owner_repo_from_url(url: &str) -> Option<(String, String)> {
-    fn parse_owner_repo_from_path(path: &str) -> Option<(String, String)> {
-        let mut segments: Vec<&str> = path.split(['/', '\\']).filter(|s| !s.is_empty()).collect();
-
-        if segments.len() < 2 {
-            return None;
-        }
-
-        let repo_segment = segments.pop()?;
-        let repo = repo_segment.trim_end_matches(".git");
-        if repo.is_empty() {
-            return None;
-        }
-
-        let owner = segments.join("/");
-        if owner.is_empty() {
-            return None;
-        }
-
-        Some((owner, repo.to_string()))
-    }
-
-    let url = url.trim();
-    if url.is_empty() {
-        return None;
-    }
-
-    let url = url.strip_prefix("git+").unwrap_or(url);
-
-    // Scheme URLs: https://host/owner/repo, ssh://git@host:port/owner/repo
-    if url.starts_with("https://") || url.starts_with("http://") || url.starts_with("ssh://") {
-        let rest = url
-            .strip_prefix("https://")
-            .or_else(|| url.strip_prefix("http://"))
-            .or_else(|| url.strip_prefix("ssh://"))?;
-
-        // Drop authority (host / user@host:port)
-        let path = rest.split_once('/')?.1;
-        let path = path.split(['?', '#']).next().unwrap_or(path);
-
-        return parse_owner_repo_from_path(path);
-    }
-
-    // SCP-style: git@host:owner/repo.git
-    if url.contains(':') && !url.contains("://") {
-        let (_, path) = url.split_once(':')?;
-        let path = path.split(['?', '#']).next().unwrap_or(path);
-
-        return parse_owner_repo_from_path(path);
-    }
-
-    None
-}
-
 /// Parse a single input node
 fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
     let locked = node.locked.as_ref()?;
@@ -323,8 +268,6 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
 
     match type_ {
         "github" | "gitlab" | "sourcehut" | "git" => {
-            let forge_type = detect_forge_type(type_, locked, original);
-
             let meta_owner = locked
                 .owner
                 .clone()
@@ -343,7 +286,7 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
                 (Some(owner), Some(repo)) if !owner.is_empty() && !repo.is_empty() => {
                     Some((owner, repo))
                 }
-                _ => url_for_parse.and_then(parse_owner_repo_from_url),
+                _ => url_for_parse.and_then(FlakeUrl::parse_owner_repo),
             };
 
             let Some((owner, repo)) = owner_repo else {
@@ -353,13 +296,38 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
                     last_modified: locked.last_modified.unwrap_or(0),
                 }));
             };
+
+            let forge_type = match type_ {
+                "github" => ForgeType::GitHub,
+                "gitlab" => ForgeType::GitLab,
+                "sourcehut" => ForgeType::SourceHut,
+                "git" => {
+                    if let Some(u) = url_for_parse {
+                        FlakeUrl::detect_forge_from_url(u)
+                    } else {
+                        ForgeType::Generic
+                    }
+                }
+                _ => ForgeType::Generic,
+            };
+
             let host = locked
                 .host
                 .clone()
                 .or_else(|| original.and_then(|o| o.host.clone()));
             let reference = original.and_then(|o| o.reference.clone());
             let rev = locked.rev.clone().unwrap_or_default();
-            let url = build_url(type_, &owner, &repo, host.as_deref(), locked, original);
+            
+            let locked_url = locked.url.as_deref();
+            let original_url = original.and_then(|o| o.url.as_deref());
+            let url = FlakeUrl::build_display_url(
+                type_, 
+                &owner, 
+                &repo, 
+                host.as_deref(), 
+                locked_url, 
+                original_url
+            );
 
             Some(FlakeInput::Git(GitInput {
                 name: name.to_string(),
@@ -381,74 +349,6 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
             rev: locked.rev.clone().unwrap_or_default(),
             last_modified: locked.last_modified.unwrap_or(0),
         })),
-    }
-}
-
-/// Detect the forge type from the input type and metadata
-fn detect_forge_type(type_: &str, locked: &NixLocked, original: Option<&NixOriginal>) -> ForgeType {
-    match type_ {
-        "github" => ForgeType::GitHub,
-        "gitlab" => ForgeType::GitLab,
-        "sourcehut" => ForgeType::SourceHut,
-        "git" => {
-            // Try to detect from URL
-            let url = locked
-                .url
-                .as_deref()
-                .or_else(|| original.and_then(|o| o.url.as_deref()))
-                .unwrap_or("");
-
-            if url.contains("github.com") {
-                ForgeType::GitHub
-            } else if url.contains("gitlab") {
-                ForgeType::GitLab
-            } else if url.contains("sr.ht") || url.contains("sourcehut") {
-                ForgeType::SourceHut
-            } else if url.contains("codeberg.org") {
-                ForgeType::Codeberg
-            } else if url.contains("gitea") || url.contains("forgejo") {
-                ForgeType::Gitea
-            } else {
-                ForgeType::Generic
-            }
-        }
-        _ => ForgeType::Generic,
-    }
-}
-
-/// Build a display URL for the input
-fn build_url(
-    type_: &str,
-    owner: &str,
-    repo: &str,
-    host: Option<&str>,
-    locked: &NixLocked,
-    original: Option<&NixOriginal>,
-) -> String {
-    match type_ {
-        "github" => format!("github:{}/{}", owner, repo),
-        "gitlab" => {
-            if let Some(h) = host {
-                if h != "gitlab.com" {
-                    return format!("gitlab:{}/{} ({})", owner, repo, h);
-                }
-            }
-            format!("gitlab:{}/{}", owner, repo)
-        }
-        "sourcehut" => {
-            let o = if owner.starts_with('~') {
-                owner.to_string()
-            } else {
-                format!("~{}", owner)
-            };
-            format!("sourcehut:{}/{}", o, repo)
-        }
-        "git" => locked
-            .url
-            .clone()
-            .or_else(|| original.and_then(|o| o.url.clone()))
-            .unwrap_or_else(|| format!("git:{}/{}", owner, repo)),
-        _ => "unknown".to_string(),
     }
 }
 
@@ -489,90 +389,8 @@ mod tests {
         let _ = resolve_flake_path(Path::new("."));
     }
 
-    #[test]
-    fn test_detect_forge_type() {
-        let locked = NixLocked {
-            type_: Some("github".to_string()),
-            owner: None,
-            repo: None,
-            rev: None,
-            last_modified: None,
-            url: None,
-            path: None,
-            host: None,
-        };
 
-        assert_eq!(
-            detect_forge_type("github", &locked, None),
-            ForgeType::GitHub
-        );
-        assert_eq!(
-            detect_forge_type("gitlab", &locked, None),
-            ForgeType::GitLab
-        );
-    }
 
-    #[test]
-    fn test_parse_owner_repo_from_url_https() {
-        assert_eq!(
-            parse_owner_repo_from_url("https://codeberg.org/LGFae/awww"),
-            Some(("LGFae".to_string(), "awww".to_string()))
-        );
-        assert_eq!(
-            parse_owner_repo_from_url("https://github.com/NixOS/nixpkgs.git"),
-            Some(("NixOS".to_string(), "nixpkgs".to_string()))
-        );
-        assert_eq!(
-            parse_owner_repo_from_url("https://gitlab.com/owner/repo"),
-            Some(("owner".to_string(), "repo".to_string()))
-        );
-        assert_eq!(
-            parse_owner_repo_from_url("https://gitlab.com/group/subgroup/repo.git"),
-            Some(("group/subgroup".to_string(), "repo".to_string()))
-        );
-    }
 
-    #[test]
-    fn test_parse_owner_repo_from_url_ssh_scp_style() {
-        assert_eq!(
-            parse_owner_repo_from_url("git@github.com:owner/repo.git"),
-            Some(("owner".to_string(), "repo".to_string()))
-        );
-        assert_eq!(
-            parse_owner_repo_from_url("git@codeberg.org:LGFae/awww.git"),
-            Some(("LGFae".to_string(), "awww".to_string()))
-        );
-        assert_eq!(
-            parse_owner_repo_from_url("git@gitlab.com:group/subgroup/repo.git"),
-            Some(("group/subgroup".to_string(), "repo".to_string()))
-        );
-    }
 
-    #[test]
-    fn test_parse_owner_repo_from_url_ssh_scheme() {
-        assert_eq!(
-            parse_owner_repo_from_url("ssh://git@github.com/owner/repo.git"),
-            Some(("owner".to_string(), "repo".to_string()))
-        );
-        assert_eq!(
-            parse_owner_repo_from_url("ssh://git@example.com:2222/owner/repo.git"),
-            Some(("owner".to_string(), "repo".to_string()))
-        );
-        assert_eq!(
-            parse_owner_repo_from_url("ssh://git@gitlab.com/group/subgroup/repo.git"),
-            Some(("group/subgroup".to_string(), "repo".to_string()))
-        );
-    }
-
-    #[test]
-    fn test_parse_owner_repo_from_url_edge_cases() {
-        assert_eq!(
-            parse_owner_repo_from_url("https://github.com/owner/repo/"),
-            Some(("owner".to_string(), "repo".to_string()))
-        );
-        assert_eq!(parse_owner_repo_from_url("invalid-url"), None);
-        assert_eq!(parse_owner_repo_from_url(""), None);
-        assert_eq!(parse_owner_repo_from_url("https://github.com/"), None);
-        assert_eq!(parse_owner_repo_from_url("https://github.com/owner/"), None);
-    }
 }

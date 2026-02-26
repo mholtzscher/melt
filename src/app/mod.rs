@@ -22,7 +22,7 @@ use tracing::{debug, warn};
 
 use crate::error::AppResult;
 use crate::event::poll_key;
-use crate::model::{FlakeInput, GitInput};
+use crate::model::GitInput;
 use crate::policy::build_lock_url;
 
 use self::effects::{Effect, LockRequest};
@@ -384,7 +384,7 @@ impl App {
         });
     }
 
-    fn spawn_check_updates(&self, effect_id: EffectId, inputs: Vec<FlakeInput>) {
+    fn spawn_check_updates(&self, effect_id: EffectId, inputs: Vec<GitInput>) {
         let git = Arc::clone(&self.git);
         let tx = self.task_tx.clone();
 

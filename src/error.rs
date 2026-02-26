@@ -38,6 +38,9 @@ pub enum GitError {
     #[error("Network error: {0}")]
     NetworkError(String),
 
+    #[error("API error; fallback required")]
+    ApiFallbackRequired,
+
     #[error("Cache directory error: {0}")]
     CacheError(String),
 }

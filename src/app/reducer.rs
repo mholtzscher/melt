@@ -1,8 +1,10 @@
-use crate::model::FlakeInput;
+use std::mem;
+
+use crate::model::{FlakeInput, UpdateStatus};
 
 use super::effects::Effect;
 use super::state::TaskResult;
-use super::{Action, AppState};
+use super::{Action, AppState, ChangelogState, ListState};
 
 pub enum AppEvent<'a> {
     Action(&'a Action),
@@ -10,11 +12,38 @@ pub enum AppEvent<'a> {
     Tick,
 }
 
-pub fn effects_for_event(state: &AppState, event: AppEvent<'_>) -> Vec<Effect> {
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum StatusCommand {
+    #[default]
+    Keep,
+    Clear,
+    Info(String),
+    Success(String),
+    Warning(String),
+    Error(String),
+}
+
+#[derive(Debug, Default)]
+pub struct Transition {
+    pub effects: Vec<Effect>,
+    pub status: StatusCommand,
+    pub cancel_requested: bool,
+}
+
+impl Transition {
+    fn with_effects(effects: Vec<Effect>) -> Self {
+        Self {
+            effects,
+            ..Self::default()
+        }
+    }
+}
+
+pub fn reduce(state: &mut AppState, event: AppEvent<'_>) -> Transition {
     match event {
-        AppEvent::Action(action) => effects_for_action(state, action),
-        AppEvent::TaskResult(result) => effects_for_task_result(result),
-        AppEvent::Tick => Vec::new(),
+        AppEvent::Action(action) => reduce_action(state, action),
+        AppEvent::TaskResult(result) => reduce_task_result(state, result),
+        AppEvent::Tick => Transition::default(),
     }
 }
 
@@ -78,5 +107,167 @@ pub fn effects_for_task_result(result: &TaskResult) -> Vec<Effect> {
         TaskResult::UpdateComplete { result: Ok(()), .. }
         | TaskResult::LockComplete { result: Ok(()), .. } => vec![Effect::LoadFlake],
         _ => Vec::new(),
+    }
+}
+
+fn reduce_action(state: &mut AppState, action: &Action) -> Transition {
+    let mut transition = Transition::with_effects(effects_for_action(state, action));
+
+    match action {
+        Action::None => {}
+        Action::Quit | Action::CancelAndQuit => {
+            *state = AppState::Quitting;
+            transition.cancel_requested = true;
+        }
+        Action::UpdateSelected(names) => {
+            transition.status =
+                StatusCommand::Info(format!("Updating {} input(s)...", names.len()));
+            if let AppState::List(list) = state {
+                for name in names {
+                    list.update_statuses
+                        .insert(name.clone(), UpdateStatus::Updating);
+                }
+            }
+        }
+        Action::UpdateAll => {
+            transition.status = StatusCommand::Info("Updating all inputs...".to_string());
+            if let AppState::List(list) = state {
+                for input in &list.flake.inputs {
+                    list.update_statuses
+                        .insert(input.name().to_string(), UpdateStatus::Updating);
+                }
+            }
+        }
+        Action::Refresh => {
+            transition.status = StatusCommand::Info("Refreshing...".to_string());
+        }
+        Action::OpenChangelog { .. } => {
+            if let Some(Effect::LoadChangelog { parent_list, .. }) = transition.effects.first() {
+                *state = AppState::LoadingChangelog(parent_list.as_ref().clone());
+                transition.status = StatusCommand::Info("Loading changelog...".to_string());
+            }
+        }
+        Action::CloseChangelog => close_changelog(state),
+        Action::ConfirmLock {
+            input_name,
+            lock_url: _,
+        } => {
+            if let AppState::Changelog(cs) = state {
+                let commit_idx = cs.confirm_lock.unwrap_or(0);
+                if let Some(commit) = cs.data.commits.get(commit_idx) {
+                    let short_sha = &commit.sha[..7.min(commit.sha.len())];
+                    transition.status =
+                        StatusCommand::Info(format!("Locking {} to {}...", input_name, short_sha));
+                }
+            }
+        }
+        Action::ShowWarning(msg) => {
+            transition.status = StatusCommand::Warning(msg.clone());
+        }
+    }
+
+    transition
+}
+
+fn reduce_task_result(state: &mut AppState, result: &TaskResult) -> Transition {
+    let mut transition = Transition::with_effects(effects_for_task_result(result));
+
+    match result {
+        TaskResult::FlakeLoaded {
+            effect_id: _,
+            result: Ok(flake),
+        } => {
+            if let AppState::List(list) = state {
+                list.update_flake(flake.clone());
+            } else {
+                *state = AppState::List(ListState::new(flake.clone()));
+            }
+            transition.status = StatusCommand::Clear;
+        }
+        TaskResult::FlakeLoaded {
+            effect_id: _,
+            result: Err(error),
+        } => {
+            *state = AppState::Error(format!("Failed to load flake: {}", error));
+        }
+        TaskResult::UpdateComplete {
+            effect_id: _,
+            result: Ok(()),
+        } => {
+            transition.status = StatusCommand::Success("Update complete".to_string());
+            if let AppState::List(list) = state {
+                list.clear_selection();
+                list.update_statuses
+                    .retain(|_, status| !matches!(status, UpdateStatus::Updating));
+            }
+        }
+        TaskResult::UpdateComplete {
+            effect_id: _,
+            result: Err(error),
+        } => {
+            transition.status = StatusCommand::Error(format!("Update failed: {}", error));
+            if let AppState::List(list) = state {
+                list.busy = false;
+                list.update_statuses
+                    .retain(|_, status| !matches!(status, UpdateStatus::Updating));
+            }
+        }
+        TaskResult::ChangelogLoaded {
+            effect_id: _,
+            result,
+        } => match result.as_ref() {
+            Ok(data) => {
+                *state = AppState::Changelog(Box::new(ChangelogState::new(
+                    data.input.clone(),
+                    data.data.clone(),
+                    data.parent_list.clone(),
+                )));
+                transition.status = StatusCommand::Clear;
+            }
+            Err(error) => {
+                transition.status =
+                    StatusCommand::Error(format!("Failed to load changelog: {}", error));
+                if let AppState::LoadingChangelog(list) = mem::replace(state, AppState::Loading) {
+                    *state = AppState::List(list);
+                }
+            }
+        },
+        TaskResult::LockComplete {
+            effect_id: _,
+            result: Ok(()),
+        } => {
+            transition.status = StatusCommand::Success("Locked successfully".to_string());
+            if let AppState::Changelog(cs) = mem::replace(state, AppState::Loading) {
+                let mut list = cs.parent_list;
+                list.busy = true;
+                *state = AppState::List(list);
+            }
+        }
+        TaskResult::LockComplete {
+            effect_id: _,
+            result: Err(error),
+        } => {
+            transition.status = StatusCommand::Error(format!("Lock failed: {}", error));
+            if let AppState::Changelog(cs) = state {
+                cs.hide_confirm();
+            }
+        }
+        TaskResult::InputStatus {
+            effect_id: _,
+            name,
+            status,
+        } => {
+            if let AppState::List(list) = state {
+                list.update_statuses.insert(name.clone(), status.clone());
+            }
+        }
+    }
+
+    transition
+}
+
+fn close_changelog(state: &mut AppState) {
+    if let AppState::Changelog(cs) = mem::replace(state, AppState::Loading) {
+        *state = AppState::List(cs.parent_list);
     }
 }

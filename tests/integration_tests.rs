@@ -5,10 +5,12 @@ use std::path::PathBuf;
 use chrono::Utc;
 use melt::app::effects::Effect;
 use melt::app::reducer::{
-    effects_for_action, effects_for_event, effects_for_task_result, AppEvent,
+    effects_for_action, effects_for_task_result, reduce, AppEvent, StatusCommand,
 };
 use melt::app::{Action, AppState, ChangelogState, ListState, TaskResult};
-use melt::model::{ChangelogData, Commit, FlakeData, FlakeInput, ForgeType, GitInput, PathInput};
+use melt::model::{
+    ChangelogData, Commit, FlakeData, FlakeInput, ForgeType, GitInput, PathInput, UpdateStatus,
+};
 use melt::AppError;
 
 fn sample_git_input(name: &str) -> GitInput {
@@ -242,19 +244,87 @@ fn failed_update_task_result_plans_no_follow_up_effects() {
 }
 
 #[test]
-fn event_planner_handles_action_and_task_result_events() {
-    let state = AppState::Loading;
+fn reducer_handles_action_task_result_and_tick_events() {
+    let mut action_state = AppState::Loading;
+    let refresh = Action::Refresh;
+    let action_transition = reduce(&mut action_state, AppEvent::Action(&refresh));
+    assert!(matches!(
+        action_transition.effects.as_slice(),
+        [Effect::LoadFlake]
+    ));
 
-    let action_effects = effects_for_event(&state, AppEvent::Action(&Action::Refresh));
-    assert!(matches!(action_effects.as_slice(), [Effect::LoadFlake]));
-
+    let mut task_state = AppState::Loading;
     let result = TaskResult::UpdateComplete {
         effect_id: 1,
         result: Ok(()),
     };
-    let task_effects = effects_for_event(&state, AppEvent::TaskResult(&result));
-    assert!(matches!(task_effects.as_slice(), [Effect::LoadFlake]));
+    let task_transition = reduce(&mut task_state, AppEvent::TaskResult(&result));
+    assert!(matches!(
+        task_transition.effects.as_slice(),
+        [Effect::LoadFlake]
+    ));
 
-    let tick_effects = effects_for_event(&state, AppEvent::Tick);
-    assert!(tick_effects.is_empty());
+    let mut tick_state = AppState::Loading;
+    let tick_transition = reduce(&mut tick_state, AppEvent::Tick);
+    assert!(tick_transition.effects.is_empty());
+    assert_eq!(tick_transition.status, StatusCommand::Keep);
+}
+
+#[test]
+fn reducer_quit_sets_quitting_and_requests_cancel() {
+    let mut state = AppState::Loading;
+    let action = Action::Quit;
+
+    let transition = reduce(&mut state, AppEvent::Action(&action));
+
+    assert!(matches!(state, AppState::Quitting));
+    assert!(transition.cancel_requested);
+    assert!(transition.effects.is_empty());
+    assert_eq!(transition.status, StatusCommand::Keep);
+}
+
+#[test]
+fn reducer_open_changelog_moves_to_loading_state() {
+    let mut state = AppState::List(list_with_git_input("nixpkgs"));
+    let action = Action::OpenChangelog { input_idx: 0 };
+
+    let transition = reduce(&mut state, AppEvent::Action(&action));
+
+    assert!(matches!(state, AppState::LoadingChangelog(_)));
+    assert!(matches!(
+        transition.effects.as_slice(),
+        [Effect::LoadChangelog { .. }]
+    ));
+    assert_eq!(
+        transition.status,
+        StatusCommand::Info("Loading changelog...".to_string())
+    );
+}
+
+#[test]
+fn reducer_update_complete_success_mutates_list_state() {
+    let mut list = list_with_git_input("nixpkgs");
+    list.selected.insert(0);
+    list.update_statuses
+        .insert("nixpkgs".to_string(), UpdateStatus::Updating);
+    let mut state = AppState::List(list);
+
+    let result = TaskResult::UpdateComplete {
+        effect_id: 9,
+        result: Ok(()),
+    };
+
+    let transition = reduce(&mut state, AppEvent::TaskResult(&result));
+
+    assert!(matches!(transition.effects.as_slice(), [Effect::LoadFlake]));
+    assert_eq!(
+        transition.status,
+        StatusCommand::Success("Update complete".to_string())
+    );
+    if let AppState::List(list) = state {
+        assert!(list.selected.is_empty());
+        assert!(list.update_statuses.is_empty());
+    } else {
+        panic!("expected list state after update complete");
+    }
 }

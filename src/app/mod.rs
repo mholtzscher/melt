@@ -22,12 +22,12 @@ use tracing::{debug, warn};
 
 use crate::error::AppResult;
 use crate::event::poll_key;
-use crate::model::{FlakeInput, GitInput, UpdateStatus};
+use crate::model::{FlakeInput, GitInput};
 use crate::service::{GitService, NixService};
 
 use self::effects::Effect;
 use self::ports::{GitPort, NixPort, StatusCallback};
-use self::reducer::AppEvent;
+use self::reducer::{AppEvent, StatusCommand, Transition};
 use crate::tui::Tui;
 use crate::ui::render;
 
@@ -98,7 +98,7 @@ impl App {
             }
 
             if let Some(key) = poll_key(Duration::from_millis(16)) {
-                self.handle_key(key).await;
+                self.handle_key(key);
             }
 
             if matches!(self.state, AppState::Quitting) {
@@ -111,8 +111,8 @@ impl App {
                 self.handle_task_result(result);
             }
 
-            let tick_effects = reducer::effects_for_event(&self.state, AppEvent::Tick);
-            self.dispatch_effects(tick_effects);
+            let transition = reducer::reduce(&mut self.state, AppEvent::Tick);
+            self.apply_transition(transition);
             self.tick_count = self.tick_count.wrapping_add(1);
 
             if let Some(ref msg) = self.status_message {
@@ -148,81 +148,15 @@ impl App {
     }
 
     /// Handle a key event
-    async fn handle_key(&mut self, key: crossterm::event::KeyEvent) {
+    fn handle_key(&mut self, key: crossterm::event::KeyEvent) {
         let action = handler::handle_key(&mut self.state, key);
-        self.execute_action(action).await;
+        self.execute_action(action);
     }
 
-    async fn execute_action(&mut self, action: Action) {
-        let effects = reducer::effects_for_event(&self.state, AppEvent::Action(&action));
-
-        match action {
-            Action::None => {}
-            Action::Quit => {
-                self.cancel_token.cancel();
-                self.state = AppState::Quitting;
-            }
-            Action::CancelAndQuit => {
-                self.cancel_token.cancel();
-                self.state = AppState::Quitting;
-            }
-            Action::UpdateSelected(names) => {
-                debug!(inputs = ?names, "Updating selected inputs");
-                self.status_message = Some(StatusMessage::info(format!(
-                    "Updating {} input(s)...",
-                    names.len()
-                )));
-                if let AppState::List(list) = &mut self.state {
-                    for name in &names {
-                        list.update_statuses
-                            .insert(name.clone(), UpdateStatus::Updating);
-                    }
-                }
-            }
-            Action::UpdateAll => {
-                debug!("Updating all inputs");
-                self.status_message = Some(StatusMessage::info("Updating all inputs..."));
-                if let AppState::List(list) = &mut self.state {
-                    for input in &list.flake.inputs {
-                        list.update_statuses
-                            .insert(input.name().to_string(), UpdateStatus::Updating);
-                    }
-                }
-            }
-            Action::Refresh => {
-                self.status_message = Some(StatusMessage::info("Refreshing..."));
-            }
-            Action::OpenChangelog { .. } => {
-                if let Some(Effect::LoadChangelog { parent_list, .. }) = effects.first() {
-                    self.status_message = Some(StatusMessage::info("Loading changelog..."));
-                    self.state = AppState::LoadingChangelog(parent_list.as_ref().clone());
-                }
-            }
-            Action::CloseChangelog => {
-                self.close_changelog();
-            }
-            Action::ConfirmLock {
-                input_name,
-                lock_url: _,
-            } => {
-                debug!(input = %input_name, "Locking to commit");
-                if let AppState::Changelog(cs) = &self.state {
-                    let commit_idx = cs.confirm_lock.unwrap_or(0);
-                    if let Some(commit) = cs.data.commits.get(commit_idx) {
-                        let short_sha = &commit.sha[..7.min(commit.sha.len())];
-                        self.status_message = Some(StatusMessage::info(format!(
-                            "Locking {} to {}...",
-                            input_name, short_sha
-                        )));
-                    }
-                }
-            }
-            Action::ShowWarning(msg) => {
-                self.status_message = Some(StatusMessage::warning(msg));
-            }
-        }
-
-        self.dispatch_effects(effects);
+    fn execute_action(&mut self, action: Action) {
+        self.log_action(&action);
+        let transition = reducer::reduce(&mut self.state, AppEvent::Action(&action));
+        self.apply_transition(transition);
     }
 
     fn next_effect_id(&mut self) -> EffectId {
@@ -256,117 +190,105 @@ impl App {
     }
 
     fn handle_task_result(&mut self, result: TaskResult) {
-        let effects = reducer::effects_for_event(&self.state, AppEvent::TaskResult(&result));
+        self.log_task_result(&result);
+        let transition = reducer::reduce(&mut self.state, AppEvent::TaskResult(&result));
+        self.apply_transition(transition);
+    }
 
+    fn apply_transition(&mut self, transition: Transition) {
+        if transition.cancel_requested {
+            self.cancel_token.cancel();
+        }
+        self.apply_status_command(transition.status);
+        self.dispatch_effects(transition.effects);
+    }
+
+    fn apply_status_command(&mut self, status: StatusCommand) {
+        match status {
+            StatusCommand::Keep => {}
+            StatusCommand::Clear => self.status_message = None,
+            StatusCommand::Info(msg) => self.status_message = Some(StatusMessage::info(msg)),
+            StatusCommand::Success(msg) => self.status_message = Some(StatusMessage::success(msg)),
+            StatusCommand::Warning(msg) => self.status_message = Some(StatusMessage::warning(msg)),
+            StatusCommand::Error(msg) => self.status_message = Some(StatusMessage::error(msg)),
+        }
+    }
+
+    fn log_action(&self, action: &Action) {
+        match action {
+            Action::UpdateSelected(names) => {
+                debug!(inputs = ?names, "Updating selected inputs");
+            }
+            Action::UpdateAll => {
+                debug!("Updating all inputs");
+            }
+            Action::ConfirmLock {
+                input_name,
+                lock_url: _,
+            } => {
+                debug!(input = %input_name, "Locking to commit");
+            }
+            _ => {}
+        }
+    }
+
+    fn log_task_result(&self, result: &TaskResult) {
         match result {
             TaskResult::FlakeLoaded {
                 effect_id,
-                result: Ok(flake),
+                result: Ok(_),
             } => {
-                debug!(effect_id, "flake loaded");
-                if let AppState::List(list) = &mut self.state {
-                    list.update_flake(flake);
-                } else {
-                    self.state = AppState::List(ListState::new(flake));
-                }
-                self.status_message = None;
+                debug!(effect_id = *effect_id, "flake loaded");
             }
             TaskResult::FlakeLoaded {
                 effect_id,
-                result: Err(e),
+                result: Err(error),
             } => {
-                debug!(effect_id, "flake load failed");
-                warn!(error = %e, "Failed to load flake");
-                self.state = AppState::Error(format!("Failed to load flake: {}", e));
+                debug!(effect_id = *effect_id, "flake load failed");
+                warn!(effect_id = *effect_id, error = %error, "Failed to load flake");
             }
             TaskResult::UpdateComplete {
                 effect_id,
                 result: Ok(()),
             } => {
-                debug!(effect_id, "update complete");
-                self.status_message = Some(StatusMessage::success("Update complete"));
-                if let AppState::List(list) = &mut self.state {
-                    list.clear_selection();
-                    list.update_statuses
-                        .retain(|_, status| !matches!(status, UpdateStatus::Updating));
-                }
+                debug!(effect_id = *effect_id, "update complete");
             }
             TaskResult::UpdateComplete {
                 effect_id,
-                result: Err(e),
+                result: Err(error),
             } => {
-                debug!(effect_id, "update failed");
-                warn!(error = %e, "Update failed");
-                self.status_message = Some(StatusMessage::error(format!("Update failed: {}", e)));
-                if let AppState::List(list) = &mut self.state {
-                    list.busy = false;
-                    list.update_statuses
-                        .retain(|_, status| !matches!(status, UpdateStatus::Updating));
-                }
+                debug!(effect_id = *effect_id, "update failed");
+                warn!(effect_id = *effect_id, error = %error, "Update failed");
             }
             TaskResult::ChangelogLoaded { effect_id, result } => {
-                debug!(effect_id, "changelog loaded result");
-                match *result {
-                    Ok(data) => {
-                        self.state = AppState::Changelog(Box::new(ChangelogState::new(
-                            data.input,
-                            data.data,
-                            data.parent_list,
-                        )));
-                        self.status_message = None;
-                    }
-                    Err(e) => {
-                        warn!(error = %e, "Failed to load changelog");
-                        self.status_message = Some(StatusMessage::error(format!(
-                            "Failed to load changelog: {}",
-                            e
-                        )));
-                        if let AppState::LoadingChangelog(list) =
-                            std::mem::replace(&mut self.state, AppState::Loading)
-                        {
-                            self.state = AppState::List(list);
-                        }
-                    }
+                if result.is_ok() {
+                    debug!(effect_id = *effect_id, "changelog loaded");
+                } else if let Err(error) = result.as_ref() {
+                    debug!(effect_id = *effect_id, "changelog load failed");
+                    warn!(effect_id = *effect_id, error = %error, "Failed to load changelog");
                 }
             }
             TaskResult::LockComplete {
                 effect_id,
                 result: Ok(()),
             } => {
-                debug!(effect_id, "lock complete");
-                self.status_message = Some(StatusMessage::success("Locked successfully"));
-                if let AppState::Changelog(cs) =
-                    std::mem::replace(&mut self.state, AppState::Loading)
-                {
-                    let mut list = cs.parent_list;
-                    list.busy = true;
-                    self.state = AppState::List(list);
-                }
+                debug!(effect_id = *effect_id, "lock complete");
             }
             TaskResult::LockComplete {
                 effect_id,
-                result: Err(e),
+                result: Err(error),
             } => {
-                debug!(effect_id, "lock failed");
-                warn!(error = %e, "Lock failed");
-                self.status_message = Some(StatusMessage::error(format!("Lock failed: {}", e)));
-                if let AppState::Changelog(cs) = &mut self.state {
-                    cs.hide_confirm();
-                }
+                debug!(effect_id = *effect_id, "lock failed");
+                warn!(effect_id = *effect_id, error = %error, "Lock failed");
             }
             TaskResult::InputStatus {
                 effect_id,
                 name,
                 status,
             } => {
-                debug!(effect_id, "input status update");
-                if let AppState::List(list) = &mut self.state {
-                    list.update_statuses.insert(name, status);
-                }
+                debug!(effect_id = *effect_id, input = %name, status = ?status, "input status update");
             }
         }
-
-        self.dispatch_effects(effects);
     }
 
     fn spawn_load_flake(&self, effect_id: EffectId) {
@@ -441,12 +363,5 @@ impl App {
             });
             let _ = git.check_updates(&inputs, callback).await;
         });
-    }
-
-    /// Close changelog and return to list
-    fn close_changelog(&mut self) {
-        if let AppState::Changelog(cs) = std::mem::replace(&mut self.state, AppState::Loading) {
-            self.state = AppState::List(cs.parent_list);
-        }
     }
 }

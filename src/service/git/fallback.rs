@@ -147,7 +147,7 @@ fn ensure_clone_url(input: &GitInput) -> Result<String, GitError> {
 }
 
 /// Create git fetch options with SSH agent authentication
-fn create_fetch_options<'a>(cancel: &CancellationToken) -> FetchOptions<'a> {
+fn create_fetch_options(cancel: &CancellationToken) -> FetchOptions<'_> {
     let cancel_for_progress = cancel.clone();
 
     let mut callbacks = RemoteCallbacks::new();

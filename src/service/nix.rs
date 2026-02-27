@@ -353,29 +353,31 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
 }
 
 impl NixPort for NixService {
-    fn load_metadata<'a>(&'a self, path: &'a Path) -> PortFuture<'a, AppResult<FlakeData>> {
-        Box::pin(async move { self.load_metadata(path).await })
+    fn load_metadata(self: std::sync::Arc<Self>, path: PathBuf) -> PortFuture<AppResult<FlakeData>> {
+        Box::pin(async move { NixService::load_metadata(self.as_ref(), &path).await })
     }
 
-    fn update_inputs<'a>(
-        &'a self,
-        path: &'a Path,
-        names: &'a [String],
-    ) -> PortFuture<'a, AppResult<()>> {
-        Box::pin(async move { self.update_inputs(path, names).await })
+    fn update_inputs(
+        self: std::sync::Arc<Self>,
+        path: PathBuf,
+        names: Vec<String>,
+    ) -> PortFuture<AppResult<()>> {
+        Box::pin(async move { NixService::update_inputs(self.as_ref(), &path, &names).await })
     }
 
-    fn update_all<'a>(&'a self, path: &'a Path) -> PortFuture<'a, AppResult<()>> {
-        Box::pin(async move { self.update_all(path).await })
+    fn update_all(self: std::sync::Arc<Self>, path: PathBuf) -> PortFuture<AppResult<()>> {
+        Box::pin(async move { NixService::update_all(self.as_ref(), &path).await })
     }
 
-    fn lock_input<'a>(
-        &'a self,
-        path: &'a Path,
-        name: &'a str,
-        override_url: &'a str,
-    ) -> PortFuture<'a, AppResult<()>> {
-        Box::pin(async move { self.lock_input(path, name, override_url).await })
+    fn lock_input(
+        self: std::sync::Arc<Self>,
+        path: PathBuf,
+        name: String,
+        override_url: String,
+    ) -> PortFuture<AppResult<()>> {
+        Box::pin(async move {
+            NixService::lock_input(self.as_ref(), &path, &name, &override_url).await
+        })
     }
 }
 

@@ -304,7 +304,7 @@ impl App {
 
         tokio::spawn(async move {
             let result = nix
-                .load_metadata(&path)
+                .load_metadata(path)
                 .await
                 .map_err(|e| TaskError::from_message(e.to_string()));
             let _ = tx.send(TaskResult::FlakeLoaded { effect_id, result });
@@ -317,7 +317,7 @@ impl App {
 
         tokio::spawn(async move {
             let result = nix
-                .update_inputs(&path, &names)
+                .update_inputs(path, names)
                 .await
                 .map_err(|e| TaskError::from_message(e.to_string()));
             let _ = tx.send(TaskResult::UpdateComplete { effect_id, result });
@@ -330,7 +330,7 @@ impl App {
 
         tokio::spawn(async move {
             let result = nix
-                .update_all(&path)
+                .update_all(path)
                 .await
                 .map_err(|e| TaskError::from_message(e.to_string()));
             let _ = tx.send(TaskResult::UpdateComplete { effect_id, result });
@@ -343,7 +343,7 @@ impl App {
 
         tokio::spawn(async move {
             let result = git
-                .get_changelog(&input)
+                .get_changelog(input.clone())
                 .await
                 .map_err(|e| TaskError::from_message(e.to_string()));
             let _ = tx.send(TaskResult::ChangelogLoaded {
@@ -362,13 +362,18 @@ impl App {
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
-            let Some(lock_url) = build_lock_url(
-                lock_request.forge_type,
-                &lock_request.owner,
-                &lock_request.repo,
-                &lock_request.rev,
-                lock_request.host.as_deref(),
-            ) else {
+            let LockRequest {
+                path,
+                name,
+                owner,
+                repo,
+                rev,
+                forge_type,
+                host,
+            } = lock_request;
+
+            let Some(lock_url) = build_lock_url(forge_type, &owner, &repo, &rev, host.as_deref())
+            else {
                 let result = Err(TaskError::external(
                     "Cannot generate lock URL for this input".to_string(),
                 ));
@@ -377,7 +382,7 @@ impl App {
             };
 
             let result = nix
-                .lock_input(&lock_request.path, &lock_request.name, &lock_url)
+                .lock_input(path, name, lock_url)
                 .await
                 .map_err(|e| TaskError::from_message(e.to_string()));
             let _ = tx.send(TaskResult::LockComplete { effect_id, result });
@@ -389,14 +394,14 @@ impl App {
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
-            let callback: StatusCallback<'_> = Box::new(move |name, status| {
+            let callback: StatusCallback = Box::new(move |name, status| {
                 let _ = tx.send(TaskResult::InputStatus {
                     effect_id,
                     name: name.to_string(),
                     status,
                 });
             });
-            let _ = git.check_updates(&inputs, callback).await;
+            let _ = git.check_updates(inputs, callback).await;
         });
     }
 }

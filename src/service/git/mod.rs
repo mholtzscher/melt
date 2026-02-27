@@ -217,20 +217,22 @@ fn get_cache_dir() -> PathBuf {
 }
 
 impl GitPort for GitService {
-    fn get_changelog<'a>(
-        &'a self,
-        input: &'a GitInput,
-    ) -> PortFuture<'a, Result<ChangelogData, GitError>> {
-        Box::pin(async move { self.get_changelog(input).await })
+    fn get_changelog(
+        self: Arc<Self>,
+        input: GitInput,
+    ) -> PortFuture<Result<ChangelogData, GitError>> {
+        Box::pin(async move { GitService::get_changelog(self.as_ref(), &input).await })
     }
 
-    fn check_updates<'a>(
-        &'a self,
-        inputs: &'a [GitInput],
-        mut on_status: StatusCallback<'a>,
-    ) -> PortFuture<'a, Result<(), GitError>> {
+    fn check_updates(
+        self: Arc<Self>,
+        inputs: Vec<GitInput>,
+        mut on_status: StatusCallback,
+    ) -> PortFuture<Result<(), GitError>> {
         Box::pin(async move {
-            self.check_updates(inputs, move |name, status| on_status(name, status))
+            GitService::check_updates(self.as_ref(), &inputs, move |name, status| {
+                on_status(name, status)
+            })
                 .await
         })
     }

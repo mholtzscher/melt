@@ -37,6 +37,16 @@ mod tests {
     }
 
     #[test]
+    fn leaves_exact_boundary_unchanged() {
+        assert_eq!(truncate_with_ellipsis("hello", 5), "hello");
+    }
+
+    #[test]
+    fn truncates_ascii_text_to_max_chars() {
+        assert_eq!(truncate_with_ellipsis("1234567890123456", 15), "123456789012...");
+    }
+
+    #[test]
     fn respects_small_max_chars() {
         assert_eq!(truncate_with_ellipsis("long", 0), "");
         assert_eq!(truncate_with_ellipsis("long", 1), ".");

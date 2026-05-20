@@ -43,7 +43,10 @@ mod tests {
 
     #[test]
     fn truncates_ascii_text_to_max_chars() {
-        assert_eq!(truncate_with_ellipsis("1234567890123456", 15), "123456789012...");
+        assert_eq!(
+            truncate_with_ellipsis("1234567890123456", 15),
+            "123456789012..."
+        );
     }
 
     #[test]

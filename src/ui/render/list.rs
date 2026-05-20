@@ -11,6 +11,7 @@ use ratatui::{
 use crate::app::state::ListState;
 use crate::model::{FlakeInput, StatusLevel, StatusMessage, UpdateStatus};
 use crate::ui::theme;
+use crate::util::text::truncate_with_ellipsis;
 use crate::util::time::format_relative;
 
 use super::common::get_spinner_frame;
@@ -165,11 +166,7 @@ fn render_help_bar(
     // Show error message for current input if it has an error status
     if let Some(input) = list.flake.inputs.get(list.cursor) {
         if let Some(UpdateStatus::Error(err)) = list.update_statuses.get(input.name()) {
-            let truncated = if err.len() > 60 {
-                format!("{}...", &err[..57])
-            } else {
-                err.clone()
-            };
+            let truncated = truncate_with_ellipsis(err, 60);
             spans.push(Span::styled(
                 format!(" | {}", truncated),
                 Style::default().fg(theme::ERROR),

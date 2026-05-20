@@ -11,6 +11,7 @@ use ratatui::{
 use crate::app::state::ChangelogState;
 use crate::model::{StatusLevel, StatusMessage};
 use crate::ui::theme;
+use crate::util::text::truncate_with_ellipsis;
 use crate::util::time::format_relative_short;
 
 /// Render the changelog view
@@ -60,17 +61,13 @@ fn render_commits_table(frame: &mut Frame, cs: &mut ChangelogState, area: Rect) 
                 theme::SHA
             };
 
-            let author = if commit.author.len() > 14 {
-                format!("{}...", &commit.author[..12])
+            let author = if commit.author.chars().count() > 15 {
+                truncate_with_ellipsis(&commit.author, 15)
             } else {
                 format!("{:14}", commit.author)
             };
 
-            let message = if commit.message.len() > 55 {
-                format!("{}...", &commit.message[..52])
-            } else {
-                commit.message.clone()
-            };
+            let message = truncate_with_ellipsis(&commit.message, 55);
 
             Row::new(vec![
                 Span::styled(lock_icon, Style::default().fg(theme::WARNING)),
@@ -190,11 +187,7 @@ fn render_confirm_dialog(frame: &mut Frame, cs: &ChangelogState, area: Rect) {
 
     frame.render_widget(Clear, dialog_area);
 
-    let msg_preview = if commit.message.len() > 40 {
-        format!("{}...", &commit.message[..37])
-    } else {
-        commit.message.clone()
-    };
+    let msg_preview = truncate_with_ellipsis(&commit.message, 40);
 
     let text = vec![
         Line::from(vec![

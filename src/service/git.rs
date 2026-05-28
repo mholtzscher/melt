@@ -540,10 +540,10 @@ fn get_cache_dir() -> PathBuf {
 }
 
 /// Get the clone URL for a git input
-fn get_clone_url(input: &GitInput) -> String {
+fn get_clone_url(input: &GitInput) -> Option<String> {
     if input.forge_type == ForgeType::Generic {
         let url = input.url.trim();
-        return url.strip_prefix("git+").unwrap_or(url).to_string();
+        return (!url.is_empty()).then(|| url.strip_prefix("git+").unwrap_or(url).to_string());
     }
 
     input
@@ -552,15 +552,9 @@ fn get_clone_url(input: &GitInput) -> String {
 }
 
 fn ensure_clone_url(input: &GitInput) -> Result<String, GitError> {
-    let url = get_clone_url(input);
-    if url.trim().is_empty() {
-        return Err(GitError::CloneFailed(format!(
-            "Missing clone URL for input '{}'",
-            input.name
-        )));
-    }
-
-    Ok(url)
+    get_clone_url(input).ok_or_else(|| {
+        GitError::CloneFailed(format!("Missing clone URL for input '{}'", input.name))
+    })
 }
 
 /// Create git fetch options with SSH agent authentication
@@ -824,7 +818,7 @@ mod tests {
 
         assert_eq!(
             get_clone_url(&input),
-            "https://github.com/NixOS/nixpkgs.git"
+            Some("https://github.com/NixOS/nixpkgs.git".to_string())
         );
     }
 
@@ -844,7 +838,7 @@ mod tests {
 
         assert_eq!(
             get_clone_url(&input),
-            "https://git.savannah.gnu.org/git/emacs.git"
+            Some("https://git.savannah.gnu.org/git/emacs.git".to_string())
         );
     }
 
@@ -864,7 +858,7 @@ mod tests {
 
         assert_eq!(
             get_clone_url(&input),
-            "https://codeberg.org/forgejo/forgejo"
+            Some("https://codeberg.org/forgejo/forgejo".to_string())
         );
     }
 

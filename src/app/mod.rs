@@ -191,10 +191,10 @@ impl App {
                 if let AppState::Changelog(cs) = &self.state {
                     let commit_idx = cs.confirm_lock.unwrap_or(0);
                     if let Some(commit) = cs.data.commits.get(commit_idx) {
-                        let short_sha = &commit.sha[..7.min(commit.sha.len())];
                         self.status_message = Some(StatusMessage::info(format!(
                             "Locking {} to {}...",
-                            input_name, short_sha
+                            input_name,
+                            commit.short_sha()
                         )));
                     }
                     self.spawn_lock(cs.parent_list.flake.path.clone(), input_name, lock_url);

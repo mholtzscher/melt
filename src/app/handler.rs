@@ -177,26 +177,22 @@ fn handle_changelog_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
 fn handle_confirm_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
     match key.code {
         KeyCode::Char('y') => {
-            let commit_idx = match cs.confirm_lock {
-                Some(idx) => idx,
-                None => return Action::None,
+            let Some(commit_idx) = cs.confirm_lock else {
+                return Action::None;
             };
-            let commit = match cs.data.commits.get(commit_idx) {
-                Some(c) => c,
-                None => return Action::None,
+            let Some(commit) = cs.data.commits.get(commit_idx) else {
+                return Action::None;
             };
 
-            let lock_url = cs.input.forge_type.lock_url(
+            let Some(lock_url) = cs.input.forge_type.lock_url(
                 &cs.input.owner,
                 &cs.input.repo,
                 &commit.sha,
                 cs.input.host.as_deref(),
-            );
-
-            if lock_url.is_empty() {
+            ) else {
                 cs.hide_confirm();
                 return Action::ShowWarning("Cannot generate lock URL for this input".to_string());
-            }
+            };
 
             Action::ConfirmLock {
                 input_name: cs.input.name.clone(),

@@ -14,20 +14,20 @@ All commands should be run through Nix tooling. **Never commit code unless expli
 
 ```bash
 # Build
-nix develop -c cargo build                    # dev build
-nix develop -c cargo build --release          # release (LTO + strip)
+nix develop --accept-flake-config --no-pure-eval -c cargo build                    # dev build
+nix develop --accept-flake-config --no-pure-eval -c cargo build --release          # release (LTO + strip)
 
 # Test
-nix develop -c cargo test                     # all tests
-nix develop -c cargo test test_name           # single test
-nix develop -c cargo test module_name::       # module tests
-nix develop -c cargo test -- --nocapture      # with output
+nix develop --accept-flake-config --no-pure-eval -c cargo test                     # all tests
+nix develop --accept-flake-config --no-pure-eval -c cargo test test_name           # single test
+nix develop --accept-flake-config --no-pure-eval -c cargo test module_name::       # module tests
+nix develop --accept-flake-config --no-pure-eval -c cargo test -- --nocapture      # with output
 
 # Lint
-nix develop -c cargo fmt                      # format code
-nix develop -c cargo fmt -- --check           # check only
-nix develop -c cargo clippy                   # run lints
-nix develop -c cargo clippy --fix             # auto-fix
+nix develop --accept-flake-config --no-pure-eval -c cargo fmt                      # format code
+nix develop --accept-flake-config --no-pure-eval -c cargo fmt -- --check           # check only
+nix develop --accept-flake-config --no-pure-eval -c cargo clippy                   # run lints
+nix develop --accept-flake-config --no-pure-eval -c cargo clippy --fix             # auto-fix
 
 # Build and run with Nix
 nix build                      # build package

@@ -10,24 +10,30 @@ A terminal UI for managing Nix flake inputs, built with Rust and ratatui.
 
 ## Commands
 
-All commands should be run through Nix tooling. **Never commit code unless explicitly prompted by the user.**
+Assume commands are run from inside the devenv shell. If not, enter it first with:
+
+```bash
+nix develop --accept-flake-config --no-pure-eval
+```
+
+**Never commit code unless explicitly prompted by the user.**
 
 ```bash
 # Build
-nix develop --accept-flake-config --no-pure-eval -c cargo build                    # dev build
-nix develop --accept-flake-config --no-pure-eval -c cargo build --release          # release (LTO + strip)
+cargo build                    # dev build
+cargo build --release          # release (LTO + strip)
 
 # Test
-nix develop --accept-flake-config --no-pure-eval -c cargo test                     # all tests
-nix develop --accept-flake-config --no-pure-eval -c cargo test test_name           # single test
-nix develop --accept-flake-config --no-pure-eval -c cargo test module_name::       # module tests
-nix develop --accept-flake-config --no-pure-eval -c cargo test -- --nocapture      # with output
+cargo test                     # all tests
+cargo test test_name           # single test
+cargo test module_name::       # module tests
+cargo test -- --nocapture      # with output
 
 # Lint
-nix develop --accept-flake-config --no-pure-eval -c cargo fmt                      # format code
-nix develop --accept-flake-config --no-pure-eval -c cargo fmt -- --check           # check only
-nix develop --accept-flake-config --no-pure-eval -c cargo clippy                   # run lints
-nix develop --accept-flake-config --no-pure-eval -c cargo clippy --fix             # auto-fix
+cargo fmt                      # format code
+cargo fmt -- --check           # check only
+cargo clippy                   # run lints
+cargo clippy --fix             # auto-fix
 
 # Build and run with Nix
 nix build                      # build package

@@ -3,10 +3,6 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -14,26 +10,15 @@
     {
       self,
       nixpkgs,
-      rust-overlay,
       flake-utils,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        overlays = [ (import rust-overlay) ];
-        pkgs = import nixpkgs { inherit system overlays; };
+        pkgs = import nixpkgs { inherit system; };
         cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
 
-        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-          extensions = [
-            "rust-src"
-            "rust-analyzer"
-            "clippy"
-          ];
-        };
-
         nativeBuildInputs = with pkgs; [
-          rustToolchain
           pkg-config
           makeWrapper
         ];
@@ -100,30 +85,6 @@
         checks.default = self.packages.${system}.default;
 
         formatter = pkgs.nixfmt;
-
-        devShells.default = pkgs.mkShell {
-          inherit buildInputs;
-
-          nativeBuildInputs =
-            nativeBuildInputs
-            ++ (with pkgs; [
-              cargo-watch
-              cargo-edit
-            ]);
-
-          RUST_BACKTRACE = 1;
-
-          # For git2 to find libgit2
-          LIBGIT2_SYS_USE_PKG_CONFIG = 1;
-        };
-
-        devShells.ci = pkgs.mkShell {
-          inherit buildInputs nativeBuildInputs;
-
-          RUST_BACKTRACE = 1;
-
-          LIBGIT2_SYS_USE_PKG_CONFIG = 1;
-        };
       }
     );
 }

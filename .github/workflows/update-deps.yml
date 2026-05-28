@@ -25,8 +25,7 @@ jobs:
         run: nix flake update
 
       - name: Update Cargo.lock
-        shell: nix develop --accept-flake-config --no-pure-eval --command bash -e {0}
-        run: cargo update
+        run: nix develop --accept-flake-config --no-pure-eval --command cargo update
 
       - name: Update cargoHash
         run: |

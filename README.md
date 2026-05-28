@@ -32,7 +32,7 @@ Or add to your flake inputs:
 ```bash
 git clone https://github.com/anomalyco/melt-rs
 cd melt-rs
-nix develop --accept-flake-config --no-pure-eval
+nix develop --no-pure-eval
 cargo build --release
 ```
 
@@ -107,7 +107,7 @@ src/
 
 ```bash
 # Enter dev shell
-nix develop --accept-flake-config --no-pure-eval
+nix develop --no-pure-eval
 
 # Run
 cargo run -- /path/to/flake

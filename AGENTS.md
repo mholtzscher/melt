@@ -13,7 +13,7 @@ A terminal UI for managing Nix flake inputs, built with Rust and ratatui.
 Assume commands are run from inside the devenv shell. If not, enter it first with:
 
 ```bash
-nix develop --accept-flake-config --no-pure-eval
+nix develop --no-pure-eval
 ```
 
 **Never commit code unless explicitly prompted by the user.**

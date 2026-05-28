@@ -6,7 +6,7 @@
 //! - Viewing all flake inputs with their current revision and update status
 //! - Checking for available updates across multiple git forges
 //! - Updating individual or multiple inputs
-//! - Viewing changelogs and locking to specific commits
+//! - Viewing commit history and locking to specific commits
 //!
 //! # Architecture
 //!

@@ -87,7 +87,7 @@ impl FlakeInput {
         match self {
             FlakeInput::Git(_) => "git",
             FlakeInput::Path(_) => "path",
-            FlakeInput::Other(_) => "other",
+            FlakeInput::Other(_) => "unsupported",
         }
     }
 }

@@ -174,7 +174,8 @@ impl App {
                         let input = git_input.clone();
                         let mut parent = list.clone();
                         parent.busy = false;
-                        self.status_message = Some(StatusMessage::info("Loading changelog..."));
+                        self.status_message =
+                            Some(StatusMessage::info("Loading commit history..."));
                         self.state = AppState::LoadingChangelog(parent.clone());
                         self.spawn_load_changelog(input, parent);
                     }
@@ -252,7 +253,7 @@ impl App {
                 Err(e) => {
                     warn!(error = %e, "Failed to load changelog");
                     self.status_message = Some(StatusMessage::error(format!(
-                        "Failed to load changelog: {}",
+                        "Failed to load commit history: {}",
                         e
                     )));
                     if let AppState::LoadingChangelog(list) =
@@ -361,7 +362,7 @@ impl App {
         });
     }
 
-    /// Close changelog and return to list
+    /// Close commit history and return to list
     fn close_changelog(&mut self) {
         if let AppState::Changelog(cs) = std::mem::replace(&mut self.state, AppState::Loading) {
             self.state = AppState::List(cs.parent_list);

@@ -24,9 +24,9 @@ pub enum Action {
     UpdateAll,
     /// Refresh flake data
     Refresh,
-    /// Open changelog for input at index
+    /// Open commit history for input at index
     OpenChangelog { input_idx: usize },
-    /// Close changelog and return to list
+    /// Close commit history and return to list
     CloseChangelog,
     /// Confirm lock to commit
     ConfirmLock {
@@ -141,14 +141,14 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
             if let Some(FlakeInput::Git(_)) = list.flake.inputs.get(idx) {
                 Action::OpenChangelog { input_idx: idx }
             } else {
-                Action::ShowWarning("Changelog only available for git inputs".to_string())
+                Action::ShowWarning("Commit history only available for git inputs".to_string())
             }
         }
         _ => Action::None,
     }
 }
 
-/// Handle key events in changelog view
+/// Handle key events in commit history view
 fn handle_changelog_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
     // Check if we're in confirm dialog
     if cs.is_confirming() {

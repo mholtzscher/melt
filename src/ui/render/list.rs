@@ -141,7 +141,7 @@ fn render_help_bar(
         ("space", "select"),
         ("u", "update"),
         ("U", "all"),
-        ("c", "changelog"),
+        ("c", "history"),
         ("r", "refresh"),
         ("q", "quit"),
     ];

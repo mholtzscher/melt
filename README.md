@@ -7,7 +7,7 @@ A terminal UI for managing Nix flake inputs. View, update, and lock your flake i
 - **View flake inputs** - See all inputs with name, type, revision, and last modified time
 - **Check for updates** - Background checks show how many commits each input is behind
 - **Update inputs** - Update selected inputs or all at once
-- **View changelog** - Browse commit history for any git input
+- **View commit history** - Browse commit history for any git input
 - **Lock to commit** - Select a specific commit to lock an input to
 - **Multi-forge support** - GitHub, GitLab, SourceHut, Codeberg, and generic git
 
@@ -57,11 +57,11 @@ melt /path/to/flake
 | `Space`     | Toggle selection                 |
 | `u`         | Update selected inputs           |
 | `U`         | Update all inputs                |
-| `c`         | View changelog for current input |
+| `c`         | View commit history for current input |
 | `r`         | Refresh flake metadata           |
 | `q` / `Esc` | Quit                             |
 
-### Changelog View
+### Commit History View
 
 | Key         | Action                          |
 | ----------- | ------------------------------- |
@@ -131,7 +131,7 @@ Setting a GitHub token increases the API rate limit from 60 to 5000 requests/hou
 ## Requirements
 
 - Nix with flakes enabled
-- Git (for changelog features, via libgit2)
+- Git (for commit history features, via libgit2)
 - SSH agent (for private repos)
 
 ## License

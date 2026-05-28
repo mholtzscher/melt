@@ -21,11 +21,37 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v22
 
+      - name: Install devenv
+        run: nix profile install nixpkgs#devenv
+
       - name: Update flake.lock
         run: nix flake update
 
+      - name: Update devenv.lock
+        run: devenv update
+
       - name: Update Cargo.lock
-        run: nix develop .#ci -c cargo update
+        shell: devenv shell bash -- -e {0}
+        run: cargo update
+
+      - name: Update cargoHash
+        run: |
+          perl -0pi -e 's/cargoHash = "sha256-[^"]+";/cargoHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";/' flake.nix
+
+          set +e
+          output=$(nix build --show-trace 2>&1)
+          status=$?
+          set -e
+
+          echo "$output"
+
+          hash=$(echo "$output" | sed -n 's/.*got:[[:space:]]*\(sha256-[A-Za-z0-9+\/=]*\).*/\1/p' | tail -n1)
+          if [ -z "$hash" ]; then
+            echo "Failed to extract updated cargoHash"
+            exit "$status"
+          fi
+
+          perl -0pi -e "s#cargoHash = \"sha256-[^\"]+\";#cargoHash = \"$hash\";#" flake.nix
 
       - name: Nix Build
         run: nix build

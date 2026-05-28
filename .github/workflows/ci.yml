@@ -38,24 +38,17 @@ jobs:
           extraPullNames: devenv
           authToken: ${{ github.event_name == 'release' && secrets.CACHIX_AUTH_TOKEN || '' }}
 
-      - name: Install devenv
-        run: nix profile install nixpkgs#devenv
-
       - name: Format
-        shell: devenv shell bash -- -e {0}
-        run: cargo fmt -- --check
+        run: nix develop --accept-flake-config --no-pure-eval --command cargo fmt -- --check
 
       - name: Clippy
-        shell: devenv shell bash -- -e {0}
-        run: cargo clippy --all-targets -- -D warnings
+        run: nix develop --accept-flake-config --no-pure-eval --command cargo clippy --all-targets -- -D warnings
 
       - name: Test
-        shell: devenv shell bash -- -e {0}
-        run: cargo test
+        run: nix develop --accept-flake-config --no-pure-eval --command cargo test
 
       - name: Build (release)
-        shell: devenv shell bash -- -e {0}
-        run: cargo build --release
+        run: nix develop --accept-flake-config --no-pure-eval --command cargo build --release
 
       - name: Nix Flake Check
-        run: nix flake check
+        run: nix flake check --accept-flake-config --no-pure-eval

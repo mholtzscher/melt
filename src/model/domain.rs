@@ -20,8 +20,12 @@ impl fmt::Display for DomainError {
             DomainError::InvalidInputName => "input name must not be empty",
             DomainError::InvalidOwner => "repository owner must not be empty",
             DomainError::InvalidRepoName => "repository name must not be empty",
-            DomainError::InvalidGitRev => "git revision must not be empty and must be a valid revision-like string",
-            DomainError::InvalidHost => "git host must not be empty and must not contain a URL scheme or path",
+            DomainError::InvalidGitRev => {
+                "git revision must not be empty and must be a valid revision-like string"
+            }
+            DomainError::InvalidHost => {
+                "git host must not be empty and must not contain a URL scheme or path"
+            }
             DomainError::InvalidGitRef => "git reference must not be empty",
             DomainError::InvalidCloneUrl => "clone URL must not be empty",
             DomainError::InvalidLockUrl => "lock URL must not be empty",
@@ -182,7 +186,10 @@ mod tests {
     fn input_name_rejects_empty_and_control_chars() {
         assert_eq!(InputName::new(""), Err(DomainError::InvalidInputName));
         assert_eq!(InputName::new("   "), Err(DomainError::InvalidInputName));
-        assert_eq!(InputName::new("bad\nname"), Err(DomainError::InvalidInputName));
+        assert_eq!(
+            InputName::new("bad\nname"),
+            Err(DomainError::InvalidInputName)
+        );
         assert_eq!(InputName::new("nixpkgs").unwrap().as_str(), "nixpkgs");
     }
 
@@ -204,18 +211,40 @@ mod tests {
     #[test]
     fn host_rejects_scheme_path_and_whitespace() {
         assert_eq!(GitHost::new(""), Err(DomainError::InvalidHost));
-        assert_eq!(GitHost::new("https://example.com"), Err(DomainError::InvalidHost));
-        assert_eq!(GitHost::new("example.com/org"), Err(DomainError::InvalidHost));
+        assert_eq!(
+            GitHost::new("https://example.com"),
+            Err(DomainError::InvalidHost)
+        );
+        assert_eq!(
+            GitHost::new("example.com/org"),
+            Err(DomainError::InvalidHost)
+        );
         assert_eq!(GitHost::new("bad host"), Err(DomainError::InvalidHost));
-        assert_eq!(GitHost::new("git.example.com").unwrap().as_str(), "git.example.com");
+        assert_eq!(
+            GitHost::new("git.example.com").unwrap().as_str(),
+            "git.example.com"
+        );
     }
 
     #[test]
     fn urls_reject_empty_and_whitespace() {
         assert_eq!(CloneUrl::new(""), Err(DomainError::InvalidCloneUrl));
-        assert_eq!(LockUrl::new("github:owner/repo/abc def"), Err(DomainError::InvalidLockUrl));
-        assert_eq!(CloneUrl::new("https://github.com/NixOS/nixpkgs.git").unwrap().as_str(), "https://github.com/NixOS/nixpkgs.git");
-        assert_eq!(LockUrl::new("github:NixOS/nixpkgs/abc123").unwrap().as_str(), "github:NixOS/nixpkgs/abc123");
+        assert_eq!(
+            LockUrl::new("github:owner/repo/abc def"),
+            Err(DomainError::InvalidLockUrl)
+        );
+        assert_eq!(
+            CloneUrl::new("https://github.com/NixOS/nixpkgs.git")
+                .unwrap()
+                .as_str(),
+            "https://github.com/NixOS/nixpkgs.git"
+        );
+        assert_eq!(
+            LockUrl::new("github:NixOS/nixpkgs/abc123")
+                .unwrap()
+                .as_str(),
+            "github:NixOS/nixpkgs/abc123"
+        );
     }
 
     #[test]

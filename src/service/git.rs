@@ -81,7 +81,7 @@ impl GitService {
         );
 
         for input in &git_inputs {
-            on_status(&input.name, UpdateStatus::Checking);
+            on_status(input.name(), UpdateStatus::Checking);
         }
 
         let mut join_set = JoinSet::new();
@@ -95,7 +95,7 @@ impl GitService {
             let semaphore = self.semaphore.clone();
 
             join_set.spawn(async move {
-                let name = input.name.clone();
+                let name = input.name().to_string();
                 let _permit = match semaphore.acquire_owned().await {
                     Ok(permit) => permit,
                     Err(_) => {
@@ -143,7 +143,7 @@ impl GitService {
     }
 
     async fn check_input_updates(&self, input: &GitInput) -> Result<usize, GitError> {
-        match input.forge_type {
+        match input.forge_type() {
             ForgeType::GitHub => self.check_github_updates(input).await,
             ForgeType::GitLab => self.check_gitlab_updates(input).await,
             ForgeType::SourceHut => self.check_git_updates(input).await,
@@ -153,10 +153,13 @@ impl GitService {
     }
 
     async fn check_github_updates(&self, input: &GitInput) -> Result<usize, GitError> {
-        let branch = input.reference.as_deref().unwrap_or("HEAD");
+        let branch = input.reference().unwrap_or("HEAD");
         let url = format!(
             "https://api.github.com/repos/{}/{}/compare/{}...{}",
-            input.owner, input.repo, input.rev, branch
+            input.owner().unwrap_or(""),
+            input.repo_name().unwrap_or(""),
+            input.rev(),
+            branch
         );
 
         let mut req = self.client.get(&url);
@@ -180,7 +183,7 @@ impl GitService {
                 .unwrap_or(0);
 
             if remaining == 0 {
-                warn!(input = %input.name, "GitHub API rate limit exceeded");
+                warn!(input = %input.name(), "GitHub API rate limit exceeded");
                 return Err(GitError::NetworkError(
                     "GitHub API rate limit exceeded. Set GITHUB_TOKEN for higher limits."
                         .to_string(),
@@ -206,14 +209,21 @@ impl GitService {
     }
 
     async fn check_gitlab_updates(&self, input: &GitInput) -> Result<usize, GitError> {
-        let host = input.host.as_deref().unwrap_or("gitlab.com");
-        let branch = input.reference.as_deref().unwrap_or("HEAD");
-        let project = format!("{}/{}", input.owner, input.repo);
+        let host = input.host().unwrap_or("gitlab.com");
+        let branch = input.reference().unwrap_or("HEAD");
+        let project = format!(
+            "{}/{}",
+            input.owner().unwrap_or(""),
+            input.repo_name().unwrap_or("")
+        );
         let encoded_project = urlencoding(&project);
 
         let url = format!(
             "https://{}/api/v4/projects/{}/repository/compare?from={}&to={}",
-            host, encoded_project, input.rev, branch
+            host,
+            encoded_project,
+            input.rev(),
+            branch
         );
 
         let resp = self
@@ -243,11 +253,11 @@ impl GitService {
     async fn check_git_updates(&self, input: &GitInput) -> Result<usize, GitError> {
         let clone_url = ensure_clone_url(input)?;
         let cache_path = self.cache_path(&clone_url);
-        let reference = input.reference.clone();
-        let rev = input.rev.clone();
+        let reference = input.reference().map(ToOwned::to_owned);
+        let rev = input.rev().to_string();
         let cancel = self.cancel_token.clone();
 
-        debug!(input = %input.name, "Using git2 fallback");
+        debug!(input = %input.name(), "Using git2 fallback");
 
         let result = tokio::time::timeout(
             self.timeouts.git_update_check,
@@ -274,9 +284,9 @@ impl GitService {
     }
 
     pub async fn get_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
-        debug!(input = %input.name, forge = ?input.forge_type, "Loading changelog");
+        debug!(input = %input.name(), forge = ?input.forge_type(), "Loading changelog");
 
-        match input.forge_type {
+        match input.forge_type() {
             ForgeType::GitHub => self.get_github_changelog(input).await,
             ForgeType::GitLab => self.get_gitlab_changelog(input).await,
             ForgeType::SourceHut => self.get_git_changelog(input).await,
@@ -286,12 +296,14 @@ impl GitService {
 
     /// Get changelog via GitHub API
     async fn get_github_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
-        let branch = input.reference.as_deref().unwrap_or("HEAD");
+        let branch = input.reference().unwrap_or("HEAD");
 
         // Get commits from branch
         let url = format!(
             "https://api.github.com/repos/{}/{}/commits?sha={}&per_page=100",
-            input.owner, input.repo, branch
+            input.owner().unwrap_or(""),
+            input.repo_name().unwrap_or(""),
+            branch
         );
 
         let mut req = self.client.get(&url);
@@ -354,7 +366,7 @@ impl GitService {
         let mut locked_idx = None;
 
         for (idx, c) in commits.iter().enumerate() {
-            let is_locked = c.sha.starts_with(&input.rev) || c.sha == input.rev;
+            let is_locked = c.sha.starts_with(input.rev()) || c.sha == input.rev();
             if is_locked {
                 locked_idx = Some(idx);
             }
@@ -394,10 +406,14 @@ impl GitService {
 
     /// Get changelog via GitLab API
     async fn get_gitlab_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
-        let host = input.host.as_deref().unwrap_or("gitlab.com");
-        let branch = input.reference.as_deref().unwrap_or("HEAD");
+        let host = input.host().unwrap_or("gitlab.com");
+        let branch = input.reference().unwrap_or("HEAD");
 
-        let project = format!("{}/{}", input.owner, input.repo);
+        let project = format!(
+            "{}/{}",
+            input.owner().unwrap_or(""),
+            input.repo_name().unwrap_or("")
+        );
         let encoded_project = urlencoding(&project);
 
         let url = format!(
@@ -433,7 +449,7 @@ impl GitService {
         let mut locked_idx = None;
 
         for (idx, c) in commits.iter().enumerate() {
-            let is_locked = c.id.starts_with(&input.rev) || c.id == input.rev;
+            let is_locked = c.id.starts_with(input.rev()) || c.id == input.rev();
             if is_locked {
                 locked_idx = Some(idx);
             }
@@ -460,8 +476,8 @@ impl GitService {
     async fn get_git_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
         let clone_url = ensure_clone_url(input)?;
         let cache_path = self.cache_path(&clone_url);
-        let reference = input.reference.clone();
-        let rev = input.rev.clone();
+        let reference = input.reference().map(ToOwned::to_owned);
+        let rev = input.rev().to_string();
         let cancel = self.cancel_token.clone();
 
         let result = tokio::time::timeout(
@@ -541,19 +557,12 @@ fn get_cache_dir() -> PathBuf {
 
 /// Get the clone URL for a git input
 fn get_clone_url(input: &GitInput) -> Option<String> {
-    if input.forge_type == ForgeType::Generic {
-        let url = input.url.trim();
-        return (!url.is_empty()).then(|| url.strip_prefix("git+").unwrap_or(url).to_string());
-    }
-
-    input
-        .forge_type
-        .clone_url(&input.owner, &input.repo, input.host.as_deref())
+    input.clone_url().ok().map(|url| url.into_string())
 }
 
 fn ensure_clone_url(input: &GitInput) -> Result<String, GitError> {
     get_clone_url(input).ok_or_else(|| {
-        GitError::CloneFailed(format!("Missing clone URL for input '{}'", input.name))
+        GitError::CloneFailed(format!("Missing clone URL for input '{}'", input.name()))
     })
 }
 
@@ -788,6 +797,7 @@ fn commit_to_model(commit: &git2::Commit) -> Commit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{CloneUrl, GitRef, GitRepo, GitRev, InputName, Owner, RepoName};
 
     #[test]
     fn test_cache_path() {
@@ -802,19 +812,26 @@ mod tests {
         assert_ne!(path1, path3);
     }
 
+    fn git_input(repo: GitRepo, url: &str) -> GitInput {
+        GitInput::new(
+            InputName::new("nixpkgs").unwrap(),
+            repo,
+            Some(GitRef::new("nixos-unstable").unwrap()),
+            GitRev::new("abc1234").unwrap(),
+            0,
+            url.to_string(),
+        )
+    }
+
     #[test]
     fn test_get_clone_url() {
-        let input = GitInput {
-            name: "nixpkgs".to_string(),
-            owner: "NixOS".to_string(),
-            repo: "nixpkgs".to_string(),
-            forge_type: ForgeType::GitHub,
-            host: None,
-            reference: Some("nixos-unstable".to_string()),
-            rev: "abc1234".to_string(),
-            last_modified: 0,
-            url: "github:NixOS/nixpkgs".to_string(),
-        };
+        let input = git_input(
+            GitRepo::github(
+                Owner::new("NixOS").unwrap(),
+                RepoName::new("nixpkgs").unwrap(),
+            ),
+            "github:NixOS/nixpkgs",
+        );
 
         assert_eq!(
             get_clone_url(&input),
@@ -824,17 +841,10 @@ mod tests {
 
     #[test]
     fn test_get_clone_url_generic_uses_input_url() {
-        let input = GitInput {
-            name: "emacs".to_string(),
-            owner: "gnu".to_string(),
-            repo: "emacs".to_string(),
-            forge_type: ForgeType::Generic,
-            host: None,
-            reference: None,
-            rev: "abc1234".to_string(),
-            last_modified: 0,
-            url: "https://git.savannah.gnu.org/git/emacs.git".to_string(),
-        };
+        let input = git_input(
+            GitRepo::generic(CloneUrl::new("https://git.savannah.gnu.org/git/emacs.git").unwrap()),
+            "https://git.savannah.gnu.org/git/emacs.git",
+        );
 
         assert_eq!(
             get_clone_url(&input),
@@ -844,17 +854,10 @@ mod tests {
 
     #[test]
     fn test_get_clone_url_generic_strips_git_prefix() {
-        let input = GitInput {
-            name: "forgejo".to_string(),
-            owner: "forgejo".to_string(),
-            repo: "forgejo".to_string(),
-            forge_type: ForgeType::Generic,
-            host: None,
-            reference: None,
-            rev: "abc1234".to_string(),
-            last_modified: 0,
-            url: "git+https://codeberg.org/forgejo/forgejo".to_string(),
-        };
+        let input = git_input(
+            GitRepo::generic(CloneUrl::new("https://codeberg.org/forgejo/forgejo").unwrap()),
+            "git+https://codeberg.org/forgejo/forgejo",
+        );
 
         assert_eq!(
             get_clone_url(&input),

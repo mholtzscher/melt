@@ -37,7 +37,7 @@ fn render_commits_table(frame: &mut Frame, cs: &mut ChangelogState, area: Rect) 
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme::BORDER))
-            .title(format!(" {} ({}) ", cs.input.name, cs.input.url))
+            .title(format!(" {} ({}) ", cs.input.name(), cs.input.url()))
             .title_style(Style::default().fg(theme::TEXT));
 
         let msg = Paragraph::new("Already up to date!")
@@ -90,7 +90,7 @@ fn render_commits_table(frame: &mut Frame, cs: &mut ChangelogState, area: Rect) 
         Constraint::Min(20),
     ];
 
-    let title = format!(" {} ({}) ", cs.input.name, cs.input.url);
+    let title = format!(" {} ({}) ", cs.input.name(), cs.input.url());
     let table = Table::new(rows, widths)
         .block(
             Block::default()
@@ -193,7 +193,7 @@ fn render_confirm_dialog(frame: &mut Frame, cs: &ChangelogState, area: Rect) {
         Line::from(vec![
             Span::styled("Lock ", Style::default().fg(theme::TEXT)),
             Span::styled(
-                &cs.input.name,
+                cs.input.name(),
                 Style::default()
                     .fg(theme::ACCENT)
                     .add_modifier(Modifier::BOLD),

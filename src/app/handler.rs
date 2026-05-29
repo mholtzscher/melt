@@ -5,7 +5,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::event::KeyEventExt;
-use crate::model::FlakeInput;
+use crate::model::{FlakeInput, GitRev};
 
 use super::state::{AppState, ChangelogState, ListState, StateKind};
 
@@ -184,19 +184,18 @@ fn handle_confirm_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
                 return Action::None;
             };
 
-            let Some(lock_url) = cs.input.forge_type.lock_url(
-                &cs.input.owner,
-                &cs.input.repo,
-                &commit.sha,
-                cs.input.host.as_deref(),
-            ) else {
+            let Ok(target_rev) = GitRev::new(commit.sha.clone()) else {
+                cs.hide_confirm();
+                return Action::ShowWarning("Cannot lock to malformed commit revision".to_string());
+            };
+            let Ok(lock_url) = cs.input.lock_url(&target_rev) else {
                 cs.hide_confirm();
                 return Action::ShowWarning("Cannot generate lock URL for this input".to_string());
             };
 
             Action::ConfirmLock {
-                input_name: cs.input.name.clone(),
-                lock_url,
+                input_name: cs.input.name().to_string(),
+                lock_url: lock_url.into_string(),
             }
         }
         KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {

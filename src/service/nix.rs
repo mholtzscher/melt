@@ -10,7 +10,10 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
-use crate::model::{FlakeData, FlakeInput, ForgeType, GitInput, OtherInput, PathInput};
+use crate::model::{
+    CloneUrl, FlakeData, FlakeInput, ForgeType, GitHost, GitInput, GitRef, GitRepo, GitRev,
+    InputName, OtherInput, Owner, PathInput, RepoName,
+};
 
 /// Service for interacting with Nix flakes
 #[derive(Clone)]
@@ -366,17 +369,34 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
             };
             let url = build_url(type_, &owner, &repo, host.as_deref(), locked, original);
 
-            Some(FlakeInput::Git(GitInput {
-                name: name.to_string(),
-                owner,
-                repo,
-                forge_type,
-                host,
+            let Ok(input_name) = InputName::new(name) else {
+                return None;
+            };
+            let Ok(git_rev) = GitRev::new(rev.clone()) else {
+                return Some(FlakeInput::Other(OtherInput {
+                    name: name.to_string(),
+                    rev: Some(rev),
+                    last_modified: locked.last_modified.unwrap_or(0),
+                }));
+            };
+            let Some(git_repo) = build_git_repo(forge_type, owner, repo, host, locked, original)
+            else {
+                return Some(FlakeInput::Other(OtherInput {
+                    name: name.to_string(),
+                    rev: Some(git_rev.as_str().to_string()),
+                    last_modified: locked.last_modified.unwrap_or(0),
+                }));
+            };
+            let reference = reference.and_then(|reference| GitRef::new(reference).ok());
+
+            Some(FlakeInput::Git(GitInput::new(
+                input_name,
+                git_repo,
                 reference,
-                rev,
-                last_modified: locked.last_modified.unwrap_or(0),
+                git_rev,
+                locked.last_modified.unwrap_or(0),
                 url,
-            }))
+            )))
         }
         "path" => Some(FlakeInput::Path(PathInput {
             name: name.to_string(),
@@ -386,6 +406,36 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
             rev: locked.rev.clone().filter(|rev| !rev.trim().is_empty()),
             last_modified: locked.last_modified.unwrap_or(0),
         })),
+    }
+}
+
+fn build_git_repo(
+    forge_type: ForgeType,
+    owner: String,
+    repo: String,
+    host: Option<String>,
+    locked: &NixLocked,
+    original: Option<&NixOriginal>,
+) -> Option<GitRepo> {
+    let owner = Owner::new(owner).ok()?;
+    let repo = RepoName::new(repo).ok()?;
+    let host = host.and_then(|host| GitHost::new(host).ok());
+
+    match forge_type {
+        ForgeType::GitHub => Some(GitRepo::github(owner, repo)),
+        ForgeType::GitLab => GitRepo::gitlab(host, owner, repo).ok(),
+        ForgeType::SourceHut => GitRepo::sourcehut(host, owner, repo).ok(),
+        ForgeType::Codeberg => Some(GitRepo::codeberg(owner, repo)),
+        ForgeType::Gitea => host.map(|host| GitRepo::gitea(host, owner, repo)),
+        ForgeType::Generic => {
+            let url = locked
+                .url
+                .as_deref()
+                .or_else(|| original.and_then(|o| o.url.as_deref()))?;
+            CloneUrl::new(url.strip_prefix("git+").unwrap_or(url))
+                .ok()
+                .map(GitRepo::generic)
+        }
     }
 }
 
@@ -552,5 +602,71 @@ mod tests {
         assert_eq!(parse_owner_repo_from_url(""), None);
         assert_eq!(parse_owner_repo_from_url("https://github.com/"), None);
         assert_eq!(parse_owner_repo_from_url("https://github.com/owner/"), None);
+    }
+
+    fn git_node(
+        type_: &str,
+        owner: Option<&str>,
+        repo: Option<&str>,
+        rev: Option<&str>,
+        url: Option<&str>,
+        host: Option<&str>,
+    ) -> NixNode {
+        NixNode {
+            inputs: None,
+            locked: Some(NixLocked {
+                type_: Some(type_.to_string()),
+                owner: owner.map(ToOwned::to_owned),
+                repo: repo.map(ToOwned::to_owned),
+                rev: rev.map(ToOwned::to_owned),
+                last_modified: Some(0),
+                url: url.map(ToOwned::to_owned),
+                path: None,
+                host: host.map(ToOwned::to_owned),
+            }),
+            original: None,
+        }
+    }
+
+    #[test]
+    fn test_parse_input_missing_rev_is_not_actionable_git() {
+        let node = git_node("github", Some("NixOS"), Some("nixpkgs"), None, None, None);
+        let input = parse_input("nixpkgs", &node).unwrap();
+        assert!(matches!(input, FlakeInput::Other(_)));
+    }
+
+    #[test]
+    fn test_parse_input_missing_owner_repo_is_not_actionable_git() {
+        let node = git_node("github", None, None, Some("abc1234"), None, None);
+        let input = parse_input("nixpkgs", &node).unwrap();
+        assert!(matches!(input, FlakeInput::Other(_)));
+    }
+
+    #[test]
+    fn test_parse_input_gitea_without_host_is_not_actionable_git() {
+        let node = git_node(
+            "git",
+            Some("owner"),
+            Some("repo"),
+            Some("abc1234"),
+            Some("https://gitea.example.org/owner/repo.git"),
+            None,
+        );
+        let input = parse_input("selfhosted", &node).unwrap();
+        assert!(matches!(input, FlakeInput::Other(_)));
+    }
+
+    #[test]
+    fn test_parse_input_valid_github_is_actionable_git() {
+        let node = git_node(
+            "github",
+            Some("NixOS"),
+            Some("nixpkgs"),
+            Some("abc1234"),
+            None,
+            None,
+        );
+        let input = parse_input("nixpkgs", &node).unwrap();
+        assert!(matches!(input, FlakeInput::Git(_)));
     }
 }

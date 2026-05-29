@@ -19,7 +19,7 @@ pub enum Action {
     /// Cancel current operation and quit
     CancelAndQuit,
     /// Update selected inputs
-    UpdateSelected(Vec<String>),
+    UpdateSelected(Vec<InputName>),
     /// Update all inputs
     UpdateAll,
     /// Refresh flake data
@@ -105,7 +105,7 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
             if is_busy {
                 return Action::None;
             }
-            let names: Vec<String> = list
+            let names: Vec<InputName> = list
                 .selected
                 .iter()
                 .filter(|name| {
@@ -114,13 +114,12 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
                         .iter()
                         .any(|input| input.name() == name.as_str())
                 })
-                .map(ToString::to_string)
+                .cloned()
                 .collect();
 
             if !names.is_empty() {
-                let selected_inputs = list.selected.iter().cloned().collect();
                 list.mode = ListMode::UpdatingSelected {
-                    inputs: selected_inputs,
+                    inputs: names.clone(),
                 };
                 Action::UpdateSelected(names)
             } else {

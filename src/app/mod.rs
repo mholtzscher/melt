@@ -145,9 +145,8 @@ impl App {
                 )));
                 if let AppState::List(list) = &mut self.state {
                     for name in &names {
-                        if let Ok(name) = InputName::new(name) {
-                            list.update_statuses.insert(name, UpdateStatus::Updating);
-                        }
+                        list.update_statuses
+                            .insert(name.clone(), UpdateStatus::Updating);
                     }
                     let path = list.flake.path.clone();
                     self.spawn_update(path, names);
@@ -310,11 +309,12 @@ impl App {
         });
     }
 
-    fn spawn_update(&self, path: PathBuf, names: Vec<String>) {
+    fn spawn_update(&self, path: PathBuf, names: Vec<InputName>) {
         let nix = self.nix.clone();
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
+            let names: Vec<String> = names.into_iter().map(InputName::into_string).collect();
             let result = nix.update_inputs(&path, &names).await;
             let _ = tx.send(TaskResult::UpdateComplete(result));
         });

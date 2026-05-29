@@ -18,7 +18,7 @@ pub enum FlakeInput {
 }
 
 /// Validated, actionable git-based flake input.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitInput {
     name: InputName,
     repo: GitRepo,
@@ -55,20 +55,12 @@ impl GitInput {
         &self.name
     }
 
-    pub fn repo(&self) -> &GitRepo {
-        &self.repo
-    }
-
     pub fn reference(&self) -> Option<&str> {
         self.reference.as_ref().map(GitRef::as_str)
     }
 
     pub fn rev(&self) -> &str {
         self.rev.as_str()
-    }
-
-    pub fn git_rev(&self) -> &GitRev {
-        &self.rev
     }
 
     pub fn last_modified(&self) -> i64 {
@@ -342,68 +334,6 @@ impl FlakeInput {
     }
 }
 
-impl ForgeType {
-    /// Get the clone URL for a repository
-    pub fn clone_url(&self, owner: &str, repo: &str, host: Option<&str>) -> Option<String> {
-        match self {
-            ForgeType::GitHub => Some(format!("https://github.com/{}/{}.git", owner, repo)),
-            ForgeType::GitLab => {
-                let h = host.unwrap_or("gitlab.com");
-                Some(format!("https://{}/{}/{}.git", h, owner, repo))
-            }
-            ForgeType::SourceHut => {
-                let h = host.unwrap_or("git.sr.ht");
-                let o = if owner.starts_with('~') {
-                    owner.to_string()
-                } else {
-                    format!("~{}", owner)
-                };
-                Some(format!("https://{}/{}/{}", h, o, repo))
-            }
-            ForgeType::Codeberg => Some(format!("https://codeberg.org/{}/{}.git", owner, repo)),
-            ForgeType::Gitea => {
-                let h = host?;
-                Some(format!("https://{}/{}/{}.git", h, owner, repo))
-            }
-            ForgeType::Generic => None,
-        }
-    }
-
-    /// Get the nix lock URL for a specific revision
-    pub fn lock_url(
-        &self,
-        owner: &str,
-        repo: &str,
-        rev: &str,
-        host: Option<&str>,
-    ) -> Option<String> {
-        match self {
-            ForgeType::GitHub => Some(format!("github:{}/{}/{}", owner, repo, rev)),
-            ForgeType::GitLab => match host {
-                None | Some("gitlab.com") => Some(format!("gitlab:{}/{}/{}", owner, repo, rev)),
-                Some(h) => Some(format!("git+https://{}/{}/{}?rev={}", h, owner, repo, rev)),
-            },
-            ForgeType::SourceHut => {
-                let o = if owner.starts_with('~') {
-                    owner.to_string()
-                } else {
-                    format!("~{}", owner)
-                };
-                Some(format!("sourcehut:{}/{}/{}", o, repo, rev))
-            }
-            ForgeType::Codeberg => Some(format!(
-                "git+https://codeberg.org/{}/{}?rev={}",
-                owner, repo, rev
-            )),
-            ForgeType::Gitea => {
-                let h = host?;
-                Some(format!("git+https://{}/{}/{}?rev={}", h, owner, repo, rev))
-            }
-            ForgeType::Generic => None,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -422,84 +352,6 @@ mod tests {
 
     fn rev(value: &str) -> GitRev {
         GitRev::new(value).unwrap()
-    }
-
-    #[test]
-    fn test_forge_clone_url() {
-        assert_eq!(
-            ForgeType::GitHub.clone_url("NixOS", "nixpkgs", None),
-            Some("https://github.com/NixOS/nixpkgs.git".to_string())
-        );
-
-        assert_eq!(
-            ForgeType::GitLab.clone_url("owner", "repo", Some("gitlab.gnome.org")),
-            Some("https://gitlab.gnome.org/owner/repo.git".to_string())
-        );
-
-        assert_eq!(
-            ForgeType::SourceHut.clone_url("~user", "repo", None),
-            Some("https://git.sr.ht/~user/repo".to_string())
-        );
-
-        assert_eq!(
-            ForgeType::SourceHut.clone_url("user", "repo", None),
-            Some("https://git.sr.ht/~user/repo".to_string())
-        );
-
-        assert_eq!(
-            ForgeType::Codeberg.clone_url("owner", "repo", None),
-            Some("https://codeberg.org/owner/repo.git".to_string())
-        );
-
-        assert_eq!(
-            ForgeType::Gitea.clone_url("owner", "repo", Some("git.example.org")),
-            Some("https://git.example.org/owner/repo.git".to_string())
-        );
-
-        assert_eq!(ForgeType::Gitea.clone_url("owner", "repo", None), None);
-        assert_eq!(ForgeType::Generic.clone_url("owner", "repo", None), None);
-    }
-
-    #[test]
-    fn test_forge_lock_url() {
-        assert_eq!(
-            ForgeType::GitHub.lock_url("NixOS", "nixpkgs", "abc1234", None),
-            Some("github:NixOS/nixpkgs/abc1234".to_string())
-        );
-
-        assert_eq!(
-            ForgeType::GitLab.lock_url("owner", "repo", "abc1234", None),
-            Some("gitlab:owner/repo/abc1234".to_string())
-        );
-
-        assert_eq!(
-            ForgeType::GitLab.lock_url("owner", "repo", "abc1234", Some("gitlab.gnome.org")),
-            Some("git+https://gitlab.gnome.org/owner/repo?rev=abc1234".to_string())
-        );
-
-        assert_eq!(
-            ForgeType::SourceHut.lock_url("user", "repo", "abc1234", None),
-            Some("sourcehut:~user/repo/abc1234".to_string())
-        );
-
-        assert_eq!(
-            ForgeType::Codeberg.lock_url("owner", "repo", "abc1234", None),
-            Some("git+https://codeberg.org/owner/repo?rev=abc1234".to_string())
-        );
-
-        assert_eq!(
-            ForgeType::Gitea.lock_url("owner", "repo", "abc1234", Some("git.example.org")),
-            Some("git+https://git.example.org/owner/repo?rev=abc1234".to_string())
-        );
-
-        assert_eq!(
-            ForgeType::Gitea.lock_url("owner", "repo", "abc1234", None),
-            None
-        );
-        assert_eq!(
-            ForgeType::Generic.lock_url("owner", "repo", "abc1234", None),
-            None
-        );
     }
 
     #[test]

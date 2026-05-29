@@ -26,7 +26,7 @@ pub fn render_changelog(
     render_commits_table(frame, cs, chunks[0]);
     render_changelog_help_bar(frame, cs, status_message, chunks[1]);
 
-    if cs.confirm_lock.is_some() {
+    if cs.is_confirming() {
         render_confirm_dialog(frame, cs, area);
     }
 }
@@ -170,12 +170,11 @@ fn render_changelog_help_bar(
 
 /// Render the confirmation dialog
 fn render_confirm_dialog(frame: &mut Frame, cs: &ChangelogState, area: Rect) {
-    let commit_idx = match cs.confirm_lock {
-        Some(idx) => idx,
-        None => return,
+    let Some(target) = cs.lock_target() else {
+        return;
     };
 
-    let commit = match cs.data.commits.get(commit_idx) {
+    let commit = match cs.data.commits.get(target.commit_idx()) {
         Some(c) => c,
         None => return,
     };

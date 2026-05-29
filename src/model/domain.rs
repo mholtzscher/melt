@@ -3,6 +3,7 @@ use std::fmt;
 
 /// Error returned when constructing a validated domain value fails.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 pub enum DomainError {
     InvalidInputName,
     InvalidOwner,
@@ -61,6 +62,7 @@ macro_rules! validated_string_type {
                 &self.0
             }
 
+            #[allow(dead_code)]
             pub fn into_string(self) -> String {
                 self.0
             }

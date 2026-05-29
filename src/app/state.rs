@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use ratatui::widgets::TableState;
 
 use crate::error::{AppError, GitError};
-use crate::model::{ChangelogData, FlakeData, GitInput, InputName, UpdateStatus};
+use crate::model::{ChangelogData, FlakeData, GitInput, GitRev, InputName, UpdateStatus};
 
 /// Application state machine
 #[derive(Debug)]
@@ -214,6 +214,37 @@ impl Clone for ListState {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LockTarget {
+    commit_idx: usize,
+    target_rev: GitRev,
+}
+
+impl LockTarget {
+    pub fn new(commit_idx: usize, commits: &[crate::model::Commit]) -> Option<Self> {
+        let commit = commits.get(commit_idx)?;
+        let target_rev = GitRev::new(commit.sha.clone()).ok()?;
+        Some(Self {
+            commit_idx,
+            target_rev,
+        })
+    }
+
+    pub fn commit_idx(&self) -> usize {
+        self.commit_idx
+    }
+
+    pub fn target_rev(&self) -> &GitRev {
+        &self.target_rev
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChangelogMode {
+    Browsing,
+    ConfirmingLock { target: LockTarget },
+}
+
 /// State for the changelog view
 #[derive(Debug)]
 pub struct ChangelogState {
@@ -225,8 +256,7 @@ pub struct ChangelogState {
     pub cursor: usize,
     /// Table state for rendering
     pub table_state: TableState,
-    /// If Some, show confirm dialog for locking to this commit index
-    pub confirm_lock: Option<usize>,
+    pub mode: ChangelogMode,
     /// Parent list state (kept for returning)
     pub parent_list: ListState,
 }
@@ -244,7 +274,7 @@ impl ChangelogState {
             data,
             cursor,
             table_state,
-            confirm_lock: None,
+            mode: ChangelogMode::Browsing,
             parent_list,
         }
     }
@@ -267,19 +297,26 @@ impl ChangelogState {
 
     /// Show confirm dialog for current cursor position
     pub fn show_confirm(&mut self) {
-        if !self.data.commits.is_empty() {
-            self.confirm_lock = Some(self.cursor);
+        if let Some(target) = LockTarget::new(self.cursor, &self.data.commits) {
+            self.mode = ChangelogMode::ConfirmingLock { target };
         }
     }
 
     /// Hide confirm dialog
     pub fn hide_confirm(&mut self) {
-        self.confirm_lock = None;
+        self.mode = ChangelogMode::Browsing;
     }
 
     /// Check if confirm dialog is showing
     pub fn is_confirming(&self) -> bool {
-        self.confirm_lock.is_some()
+        matches!(self.mode, ChangelogMode::ConfirmingLock { .. })
+    }
+
+    pub fn lock_target(&self) -> Option<&LockTarget> {
+        match &self.mode {
+            ChangelogMode::ConfirmingLock { target } => Some(target),
+            ChangelogMode::Browsing => None,
+        }
     }
 }
 

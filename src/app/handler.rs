@@ -5,7 +5,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::event::KeyEventExt;
-use crate::model::{FlakeInput, GitRev};
+use crate::model::{FlakeInput, InputName, LockUrl};
 
 use super::state::{AppState, ChangelogState, ListMode, ListState, StateKind};
 
@@ -24,14 +24,14 @@ pub enum Action {
     UpdateAll,
     /// Refresh flake data
     Refresh,
-    /// Open commit history for input at index
-    OpenChangelog { input_idx: usize },
+    /// Open commit history for a validated git input
+    OpenChangelog { input: crate::model::GitInput },
     /// Close commit history and return to list
     CloseChangelog,
     /// Confirm lock to commit
     ConfirmLock {
-        input_name: String,
-        lock_url: String,
+        input_name: InputName,
+        lock_url: LockUrl,
     },
     /// Show warning message
     ShowWarning(String),
@@ -148,8 +148,10 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
             let Some(idx) = list.current_index() else {
                 return Action::None;
             };
-            if let Some(FlakeInput::Git(_)) = list.flake.inputs.get(idx) {
-                Action::OpenChangelog { input_idx: idx }
+            if let Some(FlakeInput::Git(input)) = list.flake.inputs.get(idx) {
+                Action::OpenChangelog {
+                    input: input.clone(),
+                }
             } else {
                 Action::ShowWarning("Commit history only available for git inputs".to_string())
             }
@@ -187,25 +189,17 @@ fn handle_changelog_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
 fn handle_confirm_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
     match key.code {
         KeyCode::Char('y') => {
-            let Some(commit_idx) = cs.confirm_lock else {
+            let Some(target) = cs.lock_target() else {
                 return Action::None;
             };
-            let Some(commit) = cs.data.commits.get(commit_idx) else {
-                return Action::None;
-            };
-
-            let Ok(target_rev) = GitRev::new(commit.sha.clone()) else {
-                cs.hide_confirm();
-                return Action::ShowWarning("Cannot lock to malformed commit revision".to_string());
-            };
-            let Ok(lock_url) = cs.input.lock_url(&target_rev) else {
+            let Ok(lock_url) = cs.input.lock_url(target.target_rev()) else {
                 cs.hide_confirm();
                 return Action::ShowWarning("Cannot generate lock URL for this input".to_string());
             };
 
             Action::ConfirmLock {
-                input_name: cs.input.name().to_string(),
-                lock_url: lock_url.into_string(),
+                input_name: cs.input.input_name().clone(),
+                lock_url,
             }
         }
         KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => {

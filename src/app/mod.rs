@@ -168,17 +168,13 @@ impl App {
                 self.status_message = Some(StatusMessage::info("Refreshing..."));
                 self.spawn_load_flake();
             }
-            Action::OpenChangelog { input_idx } => {
+            Action::OpenChangelog { input } => {
                 if let AppState::List(list) = &self.state {
-                    if let Some(FlakeInput::Git(git_input)) = list.flake.inputs.get(input_idx) {
-                        let input = git_input.clone();
-                        let mut parent = list.clone();
-                        parent.mode = ListMode::Idle;
-                        self.status_message =
-                            Some(StatusMessage::info("Loading commit history..."));
-                        self.state = AppState::LoadingChangelog(parent.clone());
-                        self.spawn_load_changelog(input, parent);
-                    }
+                    let mut parent = list.clone();
+                    parent.mode = ListMode::Idle;
+                    self.status_message = Some(StatusMessage::info("Loading commit history..."));
+                    self.state = AppState::LoadingChangelog(parent.clone());
+                    self.spawn_load_changelog(input, parent);
                 }
             }
             Action::CloseChangelog => {
@@ -190,15 +186,20 @@ impl App {
             } => {
                 debug!(input = %input_name, "Locking to commit");
                 if let AppState::Changelog(cs) = &self.state {
-                    let commit_idx = cs.confirm_lock.unwrap_or(0);
-                    if let Some(commit) = cs.data.commits.get(commit_idx) {
-                        self.status_message = Some(StatusMessage::info(format!(
-                            "Locking {} to {}...",
-                            input_name,
-                            commit.short_sha()
-                        )));
+                    if let Some(target) = cs.lock_target() {
+                        if let Some(commit) = cs.data.commits.get(target.commit_idx()) {
+                            self.status_message = Some(StatusMessage::info(format!(
+                                "Locking {} to {}...",
+                                input_name,
+                                commit.short_sha()
+                            )));
+                        }
                     }
-                    self.spawn_lock(cs.parent_list.flake.path.clone(), input_name, lock_url);
+                    self.spawn_lock(
+                        cs.parent_list.flake.path.clone(),
+                        input_name.into_string(),
+                        lock_url.into_string(),
+                    );
                 }
             }
             Action::ShowWarning(msg) => {

@@ -74,7 +74,8 @@ impl GitService {
 
         let mut join_set = JoinSet::new();
 
-        for input in inputs.iter().cloned() {
+        let git_inputs = inputs.to_vec();
+        for input in git_inputs {
             if self.cancel_token.is_cancelled() {
                 break;
             }

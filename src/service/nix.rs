@@ -669,8 +669,10 @@ mod tests {
     #[test]
     fn test_parse_input_missing_rev_is_not_actionable_git() {
         let node = git_node("github", Some("NixOS"), Some("nixpkgs"), None, None, None);
-        let input = parse_input("nixpkgs", &node).unwrap();
-        assert!(matches!(input, FlakeInput::Other(_)));
+        assert!(matches!(
+            parse_raw_input("nixpkgs", &node),
+            RawInputParseResult::DisplayOnly(FlakeInput::Other(_))
+        ));
     }
 
     #[test]
@@ -695,6 +697,39 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_input_empty_input_name_is_skipped() {
+        let node = git_node(
+            "github",
+            Some("NixOS"),
+            Some("nixpkgs"),
+            Some("abc1234"),
+            None,
+            None,
+        );
+        assert!(matches!(
+            parse_raw_input("", &node),
+            RawInputParseResult::Skip
+        ));
+        assert!(parse_input("", &node).is_none());
+    }
+
+    #[test]
+    fn test_parse_input_malformed_rev_is_not_actionable_git() {
+        let node = git_node(
+            "github",
+            Some("NixOS"),
+            Some("nixpkgs"),
+            Some("abc 1234"),
+            None,
+            None,
+        );
+        assert!(matches!(
+            parse_raw_input("nixpkgs", &node),
+            RawInputParseResult::DisplayOnly(FlakeInput::Other(_))
+        ));
+    }
+
+    #[test]
     fn test_parse_input_valid_github_is_actionable_git() {
         let node = git_node(
             "github",
@@ -704,6 +739,10 @@ mod tests {
             None,
             None,
         );
+        assert!(matches!(
+            parse_raw_input("nixpkgs", &node),
+            RawInputParseResult::ActionableGit(_)
+        ));
         let input = parse_input("nixpkgs", &node).unwrap();
         assert!(matches!(input, FlakeInput::Git(_)));
     }

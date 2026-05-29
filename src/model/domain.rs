@@ -204,10 +204,20 @@ mod tests {
     }
 
     #[test]
-    fn git_rev_rejects_empty_and_whitespace() {
+    fn git_rev_and_ref_reject_empty_and_whitespace() {
         assert_eq!(GitRev::new(""), Err(DomainError::InvalidGitRev));
         assert_eq!(GitRev::new("abc def"), Err(DomainError::InvalidGitRev));
         assert_eq!(GitRev::new("abcdef123").unwrap().as_str(), "abcdef123");
+
+        assert_eq!(GitRef::new(""), Err(DomainError::InvalidGitRef));
+        assert_eq!(
+            GitRef::new("feature branch"),
+            Err(DomainError::InvalidGitRef)
+        );
+        assert_eq!(
+            GitRef::new("release-24.11").unwrap().as_str(),
+            "release-24.11"
+        );
     }
 
     #[test]

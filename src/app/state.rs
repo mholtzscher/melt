@@ -97,7 +97,7 @@ pub struct ListState {
     pub cursor: Option<ListCursor>,
     pub selected: HashSet<InputName>,
     pub table_state: TableState,
-    pub update_statuses: HashMap<String, UpdateStatus>,
+    pub update_statuses: HashMap<InputName, UpdateStatus>,
     pub mode: ListMode,
 }
 
@@ -340,7 +340,10 @@ pub enum TaskResult {
     /// Lock completed
     LockComplete(Result<(), AppError>),
     /// Status update for a single input
-    InputStatus { name: String, status: UpdateStatus },
+    InputStatus {
+        name: InputName,
+        status: UpdateStatus,
+    },
 }
 
 #[cfg(test)]

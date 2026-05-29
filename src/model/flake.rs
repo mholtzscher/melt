@@ -71,8 +71,8 @@ impl GitInput {
         &self.url
     }
 
-    pub fn forge_type(&self) -> ForgeType {
-        self.repo.forge_type()
+    pub fn repo(&self) -> &GitRepo {
+        &self.repo
     }
 
     pub fn owner(&self) -> Option<&str> {
@@ -108,17 +108,6 @@ pub struct OtherInput {
     pub name: String,
     pub rev: Option<String>,
     pub last_modified: i64,
-}
-
-/// Type of git forge
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ForgeType {
-    GitHub,
-    GitLab,
-    SourceHut,
-    Codeberg,
-    Gitea,
-    Generic,
 }
 
 /// Validated repository location. Required forge-specific data is carried by
@@ -193,17 +182,6 @@ impl GitRepo {
 
     pub fn generic(clone_url: CloneUrl) -> Self {
         Self::Generic { clone_url }
-    }
-
-    pub fn forge_type(&self) -> ForgeType {
-        match self {
-            Self::GitHub { .. } => ForgeType::GitHub,
-            Self::GitLab { .. } => ForgeType::GitLab,
-            Self::SourceHut { .. } => ForgeType::SourceHut,
-            Self::Codeberg { .. } => ForgeType::Codeberg,
-            Self::Gitea { .. } => ForgeType::Gitea,
-            Self::Generic { .. } => ForgeType::Generic,
-        }
     }
 
     pub fn owner(&self) -> Option<&str> {

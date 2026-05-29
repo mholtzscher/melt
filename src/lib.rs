@@ -48,8 +48,8 @@ pub use app::App;
 pub use config::{ServiceConfig, Timeouts};
 pub use error::{AppError, AppResult, GitError};
 pub use model::{
-    ChangelogData, Commit, FlakeData, FlakeInput, ForgeType, GitInput, OtherInput, PathInput,
-    StatusLevel, StatusMessage, UpdateStatus,
+    ChangelogData, Commit, FlakeData, FlakeInput, GitInput, OtherInput, PathInput, StatusLevel,
+    StatusMessage, UpdateStatus,
 };
 pub use service::{GitService, NixService};
 pub use tui::Tui;

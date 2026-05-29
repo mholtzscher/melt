@@ -11,8 +11,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
 use crate::model::{
-    CloneUrl, FlakeData, FlakeInput, ForgeType, GitHost, GitInput, GitRef, GitRepo, GitRev,
-    InputName, OtherInput, Owner, PathInput, RepoName,
+    CloneUrl, FlakeData, FlakeInput, GitHost, GitInput, GitRef, GitRepo, GitRev, InputName,
+    OtherInput, Owner, PathInput, RepoName,
 };
 
 /// Service for interacting with Nix flakes
@@ -409,8 +409,18 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RawForgeType {
+    GitHub,
+    GitLab,
+    SourceHut,
+    Codeberg,
+    Gitea,
+    Generic,
+}
+
 fn build_git_repo(
-    forge_type: ForgeType,
+    forge_type: RawForgeType,
     owner: String,
     repo: String,
     host: Option<String>,
@@ -422,12 +432,12 @@ fn build_git_repo(
     let host = host.and_then(|host| GitHost::new(host).ok());
 
     match forge_type {
-        ForgeType::GitHub => Some(GitRepo::github(owner, repo)),
-        ForgeType::GitLab => GitRepo::gitlab(host, owner, repo).ok(),
-        ForgeType::SourceHut => GitRepo::sourcehut(host, owner, repo).ok(),
-        ForgeType::Codeberg => Some(GitRepo::codeberg(owner, repo)),
-        ForgeType::Gitea => host.map(|host| GitRepo::gitea(host, owner, repo)),
-        ForgeType::Generic => {
+        RawForgeType::GitHub => Some(GitRepo::github(owner, repo)),
+        RawForgeType::GitLab => GitRepo::gitlab(host, owner, repo).ok(),
+        RawForgeType::SourceHut => GitRepo::sourcehut(host, owner, repo).ok(),
+        RawForgeType::Codeberg => Some(GitRepo::codeberg(owner, repo)),
+        RawForgeType::Gitea => host.map(|host| GitRepo::gitea(host, owner, repo)),
+        RawForgeType::Generic => {
             let url = locked
                 .url
                 .as_deref()
@@ -440,11 +450,15 @@ fn build_git_repo(
 }
 
 /// Detect the forge type from the input type and metadata
-fn detect_forge_type(type_: &str, locked: &NixLocked, original: Option<&NixOriginal>) -> ForgeType {
+fn detect_forge_type(
+    type_: &str,
+    locked: &NixLocked,
+    original: Option<&NixOriginal>,
+) -> RawForgeType {
     match type_ {
-        "github" => ForgeType::GitHub,
-        "gitlab" => ForgeType::GitLab,
-        "sourcehut" => ForgeType::SourceHut,
+        "github" => RawForgeType::GitHub,
+        "gitlab" => RawForgeType::GitLab,
+        "sourcehut" => RawForgeType::SourceHut,
         "git" => {
             // Try to detect from URL
             let url = locked
@@ -454,20 +468,20 @@ fn detect_forge_type(type_: &str, locked: &NixLocked, original: Option<&NixOrigi
                 .unwrap_or("");
 
             if url.contains("github.com") {
-                ForgeType::GitHub
+                RawForgeType::GitHub
             } else if url.contains("gitlab") {
-                ForgeType::GitLab
+                RawForgeType::GitLab
             } else if url.contains("sr.ht") || url.contains("sourcehut") {
-                ForgeType::SourceHut
+                RawForgeType::SourceHut
             } else if url.contains("codeberg.org") {
-                ForgeType::Codeberg
+                RawForgeType::Codeberg
             } else if url.contains("gitea") || url.contains("forgejo") {
-                ForgeType::Gitea
+                RawForgeType::Gitea
             } else {
-                ForgeType::Generic
+                RawForgeType::Generic
             }
         }
-        _ => ForgeType::Generic,
+        _ => RawForgeType::Generic,
     }
 }
 
@@ -532,11 +546,11 @@ mod tests {
 
         assert_eq!(
             detect_forge_type("github", &locked, None),
-            ForgeType::GitHub
+            RawForgeType::GitHub
         );
         assert_eq!(
             detect_forge_type("gitlab", &locked, None),
-            ForgeType::GitLab
+            RawForgeType::GitLab
         );
     }
 

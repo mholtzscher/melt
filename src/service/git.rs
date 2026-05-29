@@ -12,7 +12,7 @@ use tracing::{debug, warn};
 
 use crate::config::ServiceConfig;
 use crate::error::GitError;
-use crate::model::{ChangelogData, Commit, FlakeInput, ForgeType, GitInput, UpdateStatus};
+use crate::model::{ChangelogData, Commit, FlakeInput, GitInput, GitRepo, InputName, UpdateStatus};
 
 /// Service for git operations - uses APIs where possible, falls back to git2
 #[derive(Clone)]
@@ -64,7 +64,7 @@ impl GitService {
         mut on_status: F,
     ) -> Result<(), GitError>
     where
-        F: FnMut(&str, UpdateStatus) + Send,
+        F: FnMut(InputName, UpdateStatus) + Send,
     {
         let git_inputs: Vec<GitInput> = inputs
             .iter()
@@ -81,7 +81,7 @@ impl GitService {
         );
 
         for input in &git_inputs {
-            on_status(input.name(), UpdateStatus::Checking);
+            on_status(input.input_name().clone(), UpdateStatus::Checking);
         }
 
         let mut join_set = JoinSet::new();
@@ -95,7 +95,7 @@ impl GitService {
             let semaphore = self.semaphore.clone();
 
             join_set.spawn(async move {
-                let name = input.name().to_string();
+                let name = input.input_name().clone();
                 let _permit = match semaphore.acquire_owned().await {
                     Ok(permit) => permit,
                     Err(_) => {
@@ -130,7 +130,7 @@ impl GitService {
                 }
                 next = join_set.join_next() => {
                     match next {
-                        Some(Ok((name, status))) => on_status(&name, status),
+                        Some(Ok((name, status))) => on_status(name, status),
                         Some(Err(e)) if e.is_cancelled() => {}
                         Some(Err(e)) => warn!(error = %e, "Update check task failed"),
                         None => break,
@@ -143,12 +143,13 @@ impl GitService {
     }
 
     async fn check_input_updates(&self, input: &GitInput) -> Result<usize, GitError> {
-        match input.forge_type() {
-            ForgeType::GitHub => self.check_github_updates(input).await,
-            ForgeType::GitLab => self.check_gitlab_updates(input).await,
-            ForgeType::SourceHut => self.check_git_updates(input).await,
-            // For Codeberg/Gitea/Generic, fall back to git2 with timeout
-            _ => self.check_git_updates(input).await,
+        match input.repo() {
+            GitRepo::GitHub { .. } => self.check_github_updates(input).await,
+            GitRepo::GitLab { .. } => self.check_gitlab_updates(input).await,
+            GitRepo::SourceHut { .. }
+            | GitRepo::Codeberg { .. }
+            | GitRepo::Gitea { .. }
+            | GitRepo::Generic { .. } => self.check_git_updates(input).await,
         }
     }
 
@@ -284,13 +285,15 @@ impl GitService {
     }
 
     pub async fn get_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
-        debug!(input = %input.name(), forge = ?input.forge_type(), "Loading changelog");
+        debug!(input = %input.name(), repo = ?input.repo(), "Loading changelog");
 
-        match input.forge_type() {
-            ForgeType::GitHub => self.get_github_changelog(input).await,
-            ForgeType::GitLab => self.get_gitlab_changelog(input).await,
-            ForgeType::SourceHut => self.get_git_changelog(input).await,
-            _ => self.get_git_changelog(input).await,
+        match input.repo() {
+            GitRepo::GitHub { .. } => self.get_github_changelog(input).await,
+            GitRepo::GitLab { .. } => self.get_gitlab_changelog(input).await,
+            GitRepo::SourceHut { .. }
+            | GitRepo::Codeberg { .. }
+            | GitRepo::Gitea { .. }
+            | GitRepo::Generic { .. } => self.get_git_changelog(input).await,
         }
     }
 

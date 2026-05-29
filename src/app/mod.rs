@@ -17,7 +17,7 @@ use tracing::{debug, warn};
 
 use crate::error::AppResult;
 use crate::event::poll_key;
-use crate::model::{FlakeInput, GitInput, StatusMessage, UpdateStatus};
+use crate::model::{FlakeInput, GitInput, InputName, StatusMessage, UpdateStatus};
 use crate::service::{GitService, NixService};
 use crate::tui::Tui;
 use crate::ui::render;
@@ -145,8 +145,9 @@ impl App {
                 )));
                 if let AppState::List(list) = &mut self.state {
                     for name in &names {
-                        list.update_statuses
-                            .insert(name.clone(), UpdateStatus::Updating);
+                        if let Ok(name) = InputName::new(name) {
+                            list.update_statuses.insert(name, UpdateStatus::Updating);
+                        }
                     }
                     let path = list.flake.path.clone();
                     self.spawn_update(path, names);
@@ -157,8 +158,9 @@ impl App {
                 self.status_message = Some(StatusMessage::info("Updating all inputs..."));
                 if let AppState::List(list) = &mut self.state {
                     for input in &list.flake.inputs {
-                        list.update_statuses
-                            .insert(input.name().to_string(), UpdateStatus::Updating);
+                        if let Ok(name) = InputName::new(input.name()) {
+                            list.update_statuses.insert(name, UpdateStatus::Updating);
+                        }
                     }
                     let path = list.flake.path.clone();
                     self.spawn_update_all(path);
@@ -354,10 +356,7 @@ impl App {
         tokio::spawn(async move {
             let _ = git
                 .check_updates(&inputs, |name, status| {
-                    let _ = tx.send(TaskResult::InputStatus {
-                        name: name.to_string(),
-                        status,
-                    });
+                    let _ = tx.send(TaskResult::InputStatus { name, status });
                 })
                 .await;
         });

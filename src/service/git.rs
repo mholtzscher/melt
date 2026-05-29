@@ -12,7 +12,7 @@ use tracing::{debug, warn};
 
 use crate::config::ServiceConfig;
 use crate::error::GitError;
-use crate::model::{ChangelogData, Commit, FlakeInput, GitInput, GitRepo, InputName, UpdateStatus};
+use crate::model::{ChangelogData, Commit, GitInput, GitRepo, InputName, UpdateStatus};
 
 /// Service for git operations - uses APIs where possible, falls back to git2
 #[derive(Clone)]
@@ -60,33 +60,21 @@ impl GitService {
     /// Check for updates on multiple inputs
     pub async fn check_updates<F>(
         &self,
-        inputs: &[FlakeInput],
+        inputs: &[GitInput],
         mut on_status: F,
     ) -> Result<(), GitError>
     where
         F: FnMut(InputName, UpdateStatus) + Send,
     {
-        let git_inputs: Vec<GitInput> = inputs
-            .iter()
-            .filter_map(|i| match i {
-                FlakeInput::Git(g) => Some(g.clone()),
-                _ => None,
-            })
-            .collect();
+        debug!(git_inputs = inputs.len(), "Checking for updates");
 
-        debug!(
-            total = inputs.len(),
-            git_inputs = git_inputs.len(),
-            "Checking for updates"
-        );
-
-        for input in &git_inputs {
+        for input in inputs {
             on_status(input.input_name().clone(), UpdateStatus::Checking);
         }
 
         let mut join_set = JoinSet::new();
 
-        for input in git_inputs {
+        for input in inputs.iter().cloned() {
             if self.cancel_token.is_cancelled() {
                 break;
             }

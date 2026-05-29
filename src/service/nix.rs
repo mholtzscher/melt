@@ -312,9 +312,28 @@ fn parse_owner_repo_from_url(url: &str) -> Option<(String, String)> {
     None
 }
 
-/// Parse a single input node
-fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
-    let locked = node.locked.as_ref()?;
+#[derive(Debug, Clone)]
+enum RawInputParseResult {
+    ActionableGit(GitInput),
+    DisplayOnly(FlakeInput),
+    Skip,
+}
+
+impl RawInputParseResult {
+    fn into_flake_input(self) -> Option<FlakeInput> {
+        match self {
+            Self::ActionableGit(input) => Some(FlakeInput::Git(input)),
+            Self::DisplayOnly(input) => Some(input),
+            Self::Skip => None,
+        }
+    }
+}
+
+/// Parse a single input node into raw parse boundary result.
+fn parse_raw_input(name: &str, node: &NixNode) -> RawInputParseResult {
+    let Some(locked) = node.locked.as_ref() else {
+        return RawInputParseResult::Skip;
+    };
     let original = node.original.as_ref();
 
     let type_ = locked
@@ -349,7 +368,7 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
             };
 
             let Some((owner, repo)) = owner_repo else {
-                return Some(FlakeInput::Other(OtherInput {
+                return RawInputParseResult::DisplayOnly(FlakeInput::Other(OtherInput {
                     name: name.to_string(),
                     rev: locked.rev.clone().filter(|rev| !rev.trim().is_empty()),
                     last_modified: locked.last_modified.unwrap_or(0),
@@ -361,7 +380,7 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
                 .or_else(|| original.and_then(|o| o.host.clone()));
             let reference = original.and_then(|o| o.reference.clone());
             let Some(rev) = locked.rev.clone().filter(|rev| !rev.trim().is_empty()) else {
-                return Some(FlakeInput::Other(OtherInput {
+                return RawInputParseResult::DisplayOnly(FlakeInput::Other(OtherInput {
                     name: name.to_string(),
                     rev: None,
                     last_modified: locked.last_modified.unwrap_or(0),
@@ -370,10 +389,10 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
             let url = build_url(type_, &owner, &repo, host.as_deref(), locked, original);
 
             let Ok(input_name) = InputName::new(name) else {
-                return None;
+                return RawInputParseResult::Skip;
             };
             let Ok(git_rev) = GitRev::new(rev.clone()) else {
-                return Some(FlakeInput::Other(OtherInput {
+                return RawInputParseResult::DisplayOnly(FlakeInput::Other(OtherInput {
                     name: name.to_string(),
                     rev: Some(rev),
                     last_modified: locked.last_modified.unwrap_or(0),
@@ -381,7 +400,7 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
             };
             let Some(git_repo) = build_git_repo(forge_type, owner, repo, host, locked, original)
             else {
-                return Some(FlakeInput::Other(OtherInput {
+                return RawInputParseResult::DisplayOnly(FlakeInput::Other(OtherInput {
                     name: name.to_string(),
                     rev: Some(git_rev.as_str().to_string()),
                     last_modified: locked.last_modified.unwrap_or(0),
@@ -389,24 +408,29 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
             };
             let reference = reference.and_then(|reference| GitRef::new(reference).ok());
 
-            Some(FlakeInput::Git(GitInput::new(
+            RawInputParseResult::ActionableGit(GitInput::new(
                 input_name,
                 git_repo,
                 reference,
                 git_rev,
                 locked.last_modified.unwrap_or(0),
                 url,
-            )))
+            ))
         }
-        "path" => Some(FlakeInput::Path(PathInput {
+        "path" => RawInputParseResult::DisplayOnly(FlakeInput::Path(PathInput {
             name: name.to_string(),
         })),
-        _ => Some(FlakeInput::Other(OtherInput {
+        _ => RawInputParseResult::DisplayOnly(FlakeInput::Other(OtherInput {
             name: name.to_string(),
             rev: locked.rev.clone().filter(|rev| !rev.trim().is_empty()),
             last_modified: locked.last_modified.unwrap_or(0),
         })),
     }
+}
+
+/// Parse a single input node
+fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
+    parse_raw_input(name, node).into_flake_input()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

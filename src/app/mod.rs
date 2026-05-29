@@ -213,7 +213,14 @@ impl App {
     fn handle_task_result(&mut self, result: TaskResult) {
         match result {
             TaskResult::FlakeLoaded(Ok(flake)) => {
-                let inputs = flake.inputs.clone();
+                let inputs: Vec<GitInput> = flake
+                    .inputs
+                    .iter()
+                    .filter_map(|input| match input {
+                        FlakeInput::Git(git_input) => Some(git_input.clone()),
+                        _ => None,
+                    })
+                    .collect();
                 if let AppState::List(list) = &mut self.state {
                     list.update_flake(flake);
                 } else {
@@ -349,7 +356,7 @@ impl App {
         });
     }
 
-    fn spawn_check_updates(&self, inputs: Vec<FlakeInput>) {
+    fn spawn_check_updates(&self, inputs: Vec<GitInput>) {
         let git = self.git.clone();
         let tx = self.task_tx.clone();
 

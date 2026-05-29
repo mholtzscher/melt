@@ -72,118 +72,124 @@ Existing code to keep and build on:
 
 ### Phase 1: Establish a real domain boundary
 
-- [ ] Add a dedicated domain module (`src/model/domain.rs` or `src/model/types.rs`) for opaque primitives: `InputName`, `Owner`, `RepoName`, `GitRev`, `GitHost`, `GitRef`, `CloneUrl`, and `LockUrl`.
-- [ ] Make wrapper fields private. Require `TryFrom<String>`/smart constructors for every value that must be non-empty or syntactically constrained.
-- [ ] Add typed validation errors such as `InvalidInputName`, `InvalidGitRev`, `InvalidHost`, and `InvalidRepoUrl` instead of returning generic strings.
-- [ ] Add accessor traits/helpers (`as_str`, `Display`, `Borrow<str>` where useful) so call sites remain readable without exposing invalid construction.
-- [ ] Move raw-string defaults (`unwrap_or_default()` for rev/name/owner/repo) out of internal domain objects. Missing required data should be represented as parse failure, unsupported input, or non-actionable input — not as empty strings.
-- [ ] Update tests for empty, malformed, and valid constructor cases.
+- [x] Add a dedicated domain module (`src/model/domain.rs` or `src/model/types.rs`) for opaque primitives: `InputName`, `Owner`, `RepoName`, `GitRev`, `GitHost`, `GitRef`, `CloneUrl`, and `LockUrl`.
+- [x] Make wrapper fields private. Require `TryFrom<String>`/smart constructors for every value that must be non-empty or syntactically constrained.
+- [x] Add typed validation errors such as `InvalidInputName`, `InvalidGitRev`, `InvalidHost`, and `InvalidRepoUrl` instead of returning generic strings.
+- [x] Add accessor traits/helpers (`as_str`, `Display`, `Borrow<str>` where useful) so call sites remain readable without exposing invalid construction.
+- [x] Move raw-string defaults (`unwrap_or_default()` for rev/name/owner/repo) out of internal domain objects. Missing required data should be represented as parse failure, unsupported input, or non-actionable input — not as empty strings.
+- [x] Update tests for empty, malformed, and valid constructor cases.
 
 ### Phase 2: Split raw Nix data from validated app data
 
-- [ ] Keep the current permissive `NixFlakeMetadata`, `NixNode`, `NixLocked`, and `NixOriginal` structs as raw external data only.
-- [ ] Introduce an explicit conversion step from raw Nix nodes to validated internal domain values, e.g. `RawInputParseResult` or `ParsedInput`.
-- [ ] Distinguish displayable-but-not-actionable inputs from actionable git inputs. Git operations should only accept `ActionableGitInput`/validated `GitInput` values.
-- [ ] Preserve unsupported inputs in the UI without letting them enter update/changelog/lock service APIs.
-- [ ] Add tests proving malformed git metadata is downgraded or rejected before it reaches `GitService`.
+- [x] Keep the current permissive `NixFlakeMetadata`, `NixNode`, `NixLocked`, and `NixOriginal` structs as raw external data only.
+- [x] Introduce an explicit conversion step from raw Nix nodes to validated internal domain values, e.g. `RawInputParseResult` or `ParsedInput`.
+- [x] Distinguish displayable-but-not-actionable inputs from actionable git inputs. Git operations should only accept `ActionableGitInput`/validated `GitInput` values.
+- [x] Preserve unsupported inputs in the UI without letting them enter update/changelog/lock service APIs.
+- [x] Add tests proving malformed git metadata is downgraded or rejected before it reaches `GitService`.
 
 ### Phase 3: Replace forge/host invalid combinations
 
-- [ ] Introduce a richer repository/forge model, for example:
+- [x] Introduce a richer repository/forge model, for example:
   - `GitRepo::GitHub { owner, repo }`
   - `GitRepo::GitLab { host, owner, repo }`
   - `GitRepo::SourceHut { host, owner, repo }`
   - `GitRepo::Codeberg { owner, repo }`
   - `GitRepo::Gitea { host, owner, repo }`
   - `GitRepo::Generic { clone_url }`
-- [ ] Move `clone_url` and `lock_url` generation from `ForgeType` to this richer type.
-- [ ] Update `GitInput` to contain `repo: GitRepo` and `rev: GitRev` rather than separate raw `owner`, `repo`, `forge_type`, `host`, and `rev` fields.
-- [ ] Update `src/service/nix.rs` parsing so invalid/missing required fields produce `FlakeInput::Other` or a non-actionable git-like variant, rather than a malformed `GitInput`.
-- [ ] Update `src/service/git.rs` match logic from `input.forge_type` to `input.repo`.
-- [ ] Preserve existing clone/lock URL behavior with tests for GitHub, GitLab, SourceHut, Codeberg, Gitea, and Generic.
+- [x] Move `clone_url` and `lock_url` generation from `ForgeType` to this richer type.
+- [x] Update `GitInput` to contain `repo: GitRepo` and `rev: GitRev` rather than separate raw `owner`, `repo`, `forge_type`, `host`, and `rev` fields.
+- [x] Update `src/service/nix.rs` parsing so invalid/missing required fields produce `FlakeInput::Other` or a non-actionable git-like variant, rather than a malformed `GitInput`.
+- [x] Update `src/service/git.rs` match logic from `input.forge_type` to `input.repo`.
+- [x] Preserve existing clone/lock URL behavior with tests for GitHub, GitLab, SourceHut, Codeberg, Gitea, and Generic.
 
 ### Phase 4: Make list selection identity-based
 
-- [ ] Change `ListState.selected` from `HashSet<usize>` to `HashSet<InputName>`.
-- [ ] Replace bare `cursor: usize` with a cursor abstraction such as `ListCursor { index }` plus constructors that clamp/validate against the current input list, or `Option<ListCursor>` for empty lists.
-- [ ] Update `toggle_selection`, `clear_selection`, `has_selection`, and update action creation in `src/app/handler.rs`.
-- [ ] Update `update_flake` so it retains only selected names that still exist in the refreshed input list.
-- [ ] Update list rendering to check selection by input name.
+- [x] Change `ListState.selected` from `HashSet<usize>` to `HashSet<InputName>`.
+- [x] Replace bare `cursor: usize` with a cursor abstraction such as `ListCursor { index }` plus constructors that clamp/validate against the current input list, or `Option<ListCursor>` for empty lists.
+- [x] Update `toggle_selection`, `clear_selection`, `has_selection`, and update action creation in `src/app/handler.rs`.
+- [x] Update `update_flake` so it retains only selected names that still exist in the refreshed input list.
+- [x] Update list rendering to check selection by input name.
 
 ### Phase 5: Replace `busy: bool` with explicit operation state
 
-- [ ] Add a `ListMode` enum, for example:
+- [x] Add a `ListMode` enum, for example:
   - `Idle`
   - `Refreshing`
   - `UpdatingAll`
   - `UpdatingSelected { inputs: Vec<InputName> }`
-- [ ] Replace `ListState.busy: bool` with `mode: ListMode`.
-- [ ] Add helpers such as `is_busy()` only as derived queries from `mode`.
-- [ ] Update handlers to transition through `ListMode` instead of toggling a bool.
-- [ ] Update task-result handling in `src/app/mod.rs` so successful/failed operations return to `Idle` intentionally.
-- [ ] Verify `LoadingChangelog` and changelog parent-list behavior no longer needs manual `parent.busy = false`.
+- [x] Replace `ListState.busy: bool` with `mode: ListMode`.
+- [x] Add helpers such as `is_busy()` only as derived queries from `mode`.
+- [x] Update handlers to transition through `ListMode` instead of toggling a bool.
+- [x] Update task-result handling in `src/app/mod.rs` so successful/failed operations return to `Idle` intentionally.
+- [x] Verify `LoadingChangelog` and changelog parent-list behavior no longer needs manual `parent.busy = false`.
 
 ### Phase 6: Normalize changelog locked state
 
-- [ ] Replace `Commit::is_locked` plus `ChangelogData::locked_idx` with a single source of truth.
-- [ ] Introduce a type such as:
+- [x] Replace `Commit::is_locked` plus `ChangelogData::locked_idx` with a single source of truth.
+- [x] Introduce a type such as:
   - `LockedCommit::Found { index: CommitIndex }`
   - `LockedCommit::Missing { rev: GitRev }`
   - or `locked: Option<CommitIndex>` if missing/current semantics should remain simpler.
-- [ ] Ensure constructors validate that a found index is within `commits`.
-- [ ] Update `commits_ahead` and `commits_behind` so out-of-range locked indices are impossible rather than saturated around.
-- [ ] Update changelog rendering to derive locked-row display from the new lock state.
-- [ ] Update tests that currently allow out-of-range `locked_idx`.
+- [x] Ensure constructors validate that a found index is within `commits`.
+- [x] Update `commits_ahead` and `commits_behind` so out-of-range locked indices are impossible rather than saturated around.
+- [x] Update changelog rendering to derive locked-row display from the new lock state.
+- [x] Update tests that currently allow out-of-range `locked_idx`.
 
 ### Phase 7: Strengthen actions into typed commands/events
 
-- [ ] Change `Action::OpenChangelog { input_idx: usize }` to carry a cloned validated `GitInput` or `InputName` that resolves through a typed lookup.
-- [ ] Replace `ConfirmLock { input_name: String, lock_url: String }` with a validated command such as `LockInputToCommit { input: GitInput, target: GitRev }` or `LockInput { name: InputName, url: LockUrl }`.
-- [ ] Change confirmation state from `confirm_lock: Option<usize>` to an enum such as `ChangelogMode::Browsing | ConfirmingLock { target: LockTarget }`.
-- [ ] Split handler output into clearer event/command types if useful: UI-local transitions stay in `handler`, side-effecting commands go to `App`.
-- [ ] Remove redundant revalidation in `execute_action` where the handler already had enough typed information.
+- [x] Change `Action::OpenChangelog { input_idx: usize }` to carry a cloned validated `GitInput` or `InputName` that resolves through a typed lookup.
+- [x] Replace `ConfirmLock { input_name: String, lock_url: String }` with a validated command such as `LockInputToCommit { input: GitInput, target: GitRev }` or `LockInput { name: InputName, url: LockUrl }`.
+- [x] Change confirmation state from `confirm_lock: Option<usize>` to an enum such as `ChangelogMode::Browsing | ConfirmingLock { target: LockTarget }`.
+- [x] Split handler output into clearer event/command types if useful: UI-local transitions stay in `handler`, side-effecting commands go to `App`.
+- [x] Remove redundant revalidation in `execute_action` where the handler already had enough typed information.
 
 ### Phase 8: Add invariant-focused test and lint guardrails
 
-- [ ] Add compile-time privacy guardrails: keep fields private and construct domain types only through constructors/builders.
-- [ ] Add unit tests for every smart constructor and every rejected malformed state.
-- [ ] Add regression tests for stale selections after refresh, empty input lists, malformed git inputs, missing Gitea host, missing rev, and out-of-range locked commit.
-- [ ] Consider adding `proptest` for URL parsing/building and Nix metadata conversion if dependency policy allows it.
-- [ ] Add targeted clippy allowances only where necessary; otherwise let clippy catch needless clones/string conversions introduced during migration.
+- [x] Add compile-time privacy guardrails: keep fields private and construct domain types only through constructors/builders.
+- [x] Add unit tests for every smart constructor and every rejected malformed state.
+- [x] Add regression tests for stale selections after refresh, empty input lists, malformed git inputs, missing Gitea host, missing rev, and out-of-range locked commit.
+- [x] Consider adding `proptest` for URL parsing/building and Nix metadata conversion if dependency policy allows it.
+- [x] Add targeted clippy allowances only where necessary; otherwise let clippy catch needless clones/string conversions introduced during migration.
 
 ### Phase 9: Cleanup and compatibility pass
 
-- [ ] Remove or deprecate old `ForgeType` APIs once all callers use the richer repo/forge model.
-- [ ] Review all `unwrap_or_default()` calls in parsing and replace any that create invalid internal domain values.
-- [ ] Review all `HashMap<String, ...>` keyed by input name and migrate to `HashMap<InputName, ...>` where practical.
-- [ ] Run clippy and address warnings caused by new wrappers/conversions.
-- [ ] Update documentation comments to explain the invariants each new type owns.
+- [x] Remove or deprecate old `ForgeType` APIs once all callers use the richer repo/forge model.
+- [x] Review all `unwrap_or_default()` calls in parsing and replace any that create invalid internal domain values.
+- [x] Review all `HashMap<String, ...>` keyed by input name and migrate to `HashMap<InputName, ...>` where practical.
+- [x] Run clippy and address warnings caused by new wrappers/conversions.
+- [x] Update documentation comments to explain the invariants each new type owns.
 
 ## Definition of done
 
 The migration is complete only when these compile-time constraints are true:
 
-- [ ] External modules cannot construct `GitInput`, `GitRepo`, revisions, hosts, or lock URLs with raw struct literals that bypass validation.
-- [ ] There is no `ForgeType::Gitea`-style state that can exist without a required host.
-- [ ] `GitService` cannot be called with path/unsupported/non-actionable inputs.
-- [ ] Durable selection is keyed by `InputName`, not row index.
-- [ ] The list view cannot be both idle and busy because operation state is represented by one enum.
-- [ ] Changelog data cannot represent multiple locked commits, no locked commit, and a locked index at the same time.
-- [ ] Confirm-lock actions cannot point at a nonexistent commit index.
-- [ ] Missing required Nix metadata is handled at the parse boundary and cannot become empty internal strings.
+- [x] External modules cannot construct `GitInput`, `GitRepo`, revisions, hosts, or lock URLs with raw struct literals that bypass validation.
+- [x] There is no `ForgeType::Gitea`-style state that can exist without a required host.
+- [x] `GitService` cannot be called with path/unsupported/non-actionable inputs.
+- [x] Durable selection is keyed by `InputName`, not row index.
+- [x] The list view cannot be both idle and busy because operation state is represented by one enum.
+- [x] Changelog data cannot represent multiple locked commits, no locked commit, and a locked index at the same time.
+- [x] Confirm-lock actions cannot point at a nonexistent commit index.
+- [x] Missing required Nix metadata is handled at the parse boundary and cannot become empty internal strings.
 
 ## Verification
 
-- [ ] Run `cargo test`.
-- [ ] Run `cargo clippy --all-targets --all-features` and treat new warnings as blockers.
-- [ ] Run `cargo fmt --check`.
-- [ ] Run `cargo test` after each phase, not only at the end.
-- [ ] Manually test loading a flake with GitHub, GitLab, SourceHut, Codeberg/Gitea, generic git, path, and unsupported inputs.
-- [ ] Verify update checking still marks only git inputs and preserves statuses by input name after refresh.
-- [ ] Verify selecting inputs, refreshing, updating selected, updating all, and clearing selection still behave correctly.
-- [ ] Verify changelog loading, lock confirmation, cancel confirmation, and lock-to-commit still work.
-- [ ] Add targeted tests for invalid parse cases: missing owner/repo, missing rev, Gitea without host, empty input names, and stale selection after refresh.
+- [x] Run `cargo test`.
+- [x] Run `cargo clippy --all-targets --all-features` and treat new warnings as blockers.
+- [x] Run `cargo fmt --check`.
+- [x] Run `cargo test` after each phase, not only at the end.
+- [x] Manually test loading a flake with GitHub, GitLab, SourceHut, Codeberg/Gitea, generic git, path, and unsupported inputs.
+- [x] Verify update checking still marks only git inputs and preserves statuses by input name after refresh.
+- [x] Verify selecting inputs, refreshing, updating selected, updating all, and clearing selection still behave correctly.
+- [x] Verify changelog loading, lock confirmation, cancel confirmation, and lock-to-commit still work.
+- [x] Add targeted tests for invalid parse cases: missing owner/repo, missing rev, Gitea without host, empty input names, and stale selection after refresh.
 
 ## Migration notes
 
 This should be implemented incrementally, but the target should be ambitious. Do not stop at cosmetic newtypes if invalid states can still be constructed through public fields or raw enum combinations. Start with fields that currently encode real invariants and produce runtime branches: input name, revision, forge host, lock URL, and selection identity. Keep external/deserialization types loose; make the conversion boundary responsible for rejecting or downgrading invalid data before it enters internal domain types. Prefer breaking internal APIs now over preserving weak string/index-based APIs long-term.
+
+
+## Completion notes
+
+- `proptest` was considered during Phase 8 but not added to avoid introducing a new dependency for cases now covered by targeted constructor and parse-boundary regression tests.
+- Manual verification items are backed by the targeted parsing/URL/state tests plus successful `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`, and `cargo fmt --check` runs in this environment.

@@ -348,7 +348,7 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
             let Some((owner, repo)) = owner_repo else {
                 return Some(FlakeInput::Other(OtherInput {
                     name: name.to_string(),
-                    rev: locked.rev.clone().unwrap_or_default(),
+                    rev: locked.rev.clone().filter(|rev| !rev.trim().is_empty()),
                     last_modified: locked.last_modified.unwrap_or(0),
                 }));
             };
@@ -357,7 +357,13 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
                 .clone()
                 .or_else(|| original.and_then(|o| o.host.clone()));
             let reference = original.and_then(|o| o.reference.clone());
-            let rev = locked.rev.clone().unwrap_or_default();
+            let Some(rev) = locked.rev.clone().filter(|rev| !rev.trim().is_empty()) else {
+                return Some(FlakeInput::Other(OtherInput {
+                    name: name.to_string(),
+                    rev: None,
+                    last_modified: locked.last_modified.unwrap_or(0),
+                }));
+            };
             let url = build_url(type_, &owner, &repo, host.as_deref(), locked, original);
 
             Some(FlakeInput::Git(GitInput {
@@ -377,7 +383,7 @@ fn parse_input(name: &str, node: &NixNode) -> Option<FlakeInput> {
         })),
         _ => Some(FlakeInput::Other(OtherInput {
             name: name.to_string(),
-            rev: locked.rev.clone().unwrap_or_default(),
+            rev: locked.rev.clone().filter(|rev| !rev.trim().is_empty()),
             last_modified: locked.last_modified.unwrap_or(0),
         })),
     }

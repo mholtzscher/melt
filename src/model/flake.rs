@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use super::{CloneUrl, DomainError, GitHost, GitRev, LockUrl, Owner, RepoName};
+
 /// Data about a loaded flake
 #[derive(Debug, Clone)]
 pub struct FlakeData {
@@ -39,7 +41,7 @@ pub struct PathInput {
 #[derive(Debug, Clone)]
 pub struct OtherInput {
     pub name: String,
-    pub rev: String,
+    pub rev: Option<String>,
     pub last_modified: i64,
 }
 
@@ -52,6 +54,140 @@ pub enum ForgeType {
     Codeberg,
     Gitea,
     Generic,
+}
+
+/// Validated repository location. Required forge-specific data is carried by
+/// the variant, so states such as a Gitea repository without a host cannot be
+/// represented by this type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitRepo {
+    GitHub { owner: Owner, repo: RepoName },
+    GitLab { host: GitHost, owner: Owner, repo: RepoName },
+    SourceHut { host: GitHost, owner: Owner, repo: RepoName },
+    Codeberg { owner: Owner, repo: RepoName },
+    Gitea { host: GitHost, owner: Owner, repo: RepoName },
+    Generic { clone_url: CloneUrl },
+}
+
+impl GitRepo {
+    pub fn github(owner: Owner, repo: RepoName) -> Self {
+        Self::GitHub { owner, repo }
+    }
+
+    pub fn gitlab(host: Option<GitHost>, owner: Owner, repo: RepoName) -> Result<Self, DomainError> {
+        let host = match host {
+            Some(host) => host,
+            None => GitHost::new("gitlab.com")?,
+        };
+        Ok(Self::GitLab { host, owner, repo })
+    }
+
+    pub fn sourcehut(host: Option<GitHost>, owner: Owner, repo: RepoName) -> Result<Self, DomainError> {
+        let host = match host {
+            Some(host) => host,
+            None => GitHost::new("git.sr.ht")?,
+        };
+        Ok(Self::SourceHut { host, owner, repo })
+    }
+
+    pub fn codeberg(owner: Owner, repo: RepoName) -> Self {
+        Self::Codeberg { owner, repo }
+    }
+
+    pub fn gitea(host: GitHost, owner: Owner, repo: RepoName) -> Self {
+        Self::Gitea { host, owner, repo }
+    }
+
+    pub fn generic(clone_url: CloneUrl) -> Self {
+        Self::Generic { clone_url }
+    }
+
+    pub fn forge_type(&self) -> ForgeType {
+        match self {
+            Self::GitHub { .. } => ForgeType::GitHub,
+            Self::GitLab { .. } => ForgeType::GitLab,
+            Self::SourceHut { .. } => ForgeType::SourceHut,
+            Self::Codeberg { .. } => ForgeType::Codeberg,
+            Self::Gitea { .. } => ForgeType::Gitea,
+            Self::Generic { .. } => ForgeType::Generic,
+        }
+    }
+
+    pub fn owner(&self) -> Option<&str> {
+        match self {
+            Self::GitHub { owner, .. }
+            | Self::GitLab { owner, .. }
+            | Self::SourceHut { owner, .. }
+            | Self::Codeberg { owner, .. }
+            | Self::Gitea { owner, .. } => Some(owner.as_str()),
+            Self::Generic { .. } => None,
+        }
+    }
+
+    pub fn repo_name(&self) -> Option<&str> {
+        match self {
+            Self::GitHub { repo, .. }
+            | Self::GitLab { repo, .. }
+            | Self::SourceHut { repo, .. }
+            | Self::Codeberg { repo, .. }
+            | Self::Gitea { repo, .. } => Some(repo.as_str()),
+            Self::Generic { .. } => None,
+        }
+    }
+
+    pub fn host(&self) -> Option<&str> {
+        match self {
+            Self::GitLab { host, .. } | Self::SourceHut { host, .. } | Self::Gitea { host, .. } => {
+                Some(host.as_str())
+            }
+            _ => None,
+        }
+    }
+
+    pub fn clone_url(&self) -> Result<CloneUrl, DomainError> {
+        match self {
+            Self::GitHub { owner, repo } => CloneUrl::new(format!("https://github.com/{}/{}.git", owner, repo)),
+            Self::GitLab { host, owner, repo } => CloneUrl::new(format!("https://{}/{}/{}.git", host, owner, repo)),
+            Self::SourceHut { host, owner, repo } => {
+                let owner = sourcehut_owner(owner.as_str());
+                CloneUrl::new(format!("https://{}/{}/{}", host, owner, repo))
+            }
+            Self::Codeberg { owner, repo } => CloneUrl::new(format!("https://codeberg.org/{}/{}.git", owner, repo)),
+            Self::Gitea { host, owner, repo } => CloneUrl::new(format!("https://{}/{}/{}.git", host, owner, repo)),
+            Self::Generic { clone_url } => Ok(clone_url.clone()),
+        }
+    }
+
+    pub fn lock_url(&self, rev: &GitRev) -> Result<LockUrl, DomainError> {
+        match self {
+            Self::GitHub { owner, repo } => LockUrl::new(format!("github:{}/{}/{}", owner, repo, rev)),
+            Self::GitLab { host, owner, repo } if host.as_str() == "gitlab.com" => {
+                LockUrl::new(format!("gitlab:{}/{}/{}", owner, repo, rev))
+            }
+            Self::GitLab { host, owner, repo } => {
+                LockUrl::new(format!("git+https://{}/{}/{}?rev={}", host, owner, repo, rev))
+            }
+            Self::SourceHut { owner, repo, .. } => {
+                let owner = sourcehut_owner(owner.as_str());
+                LockUrl::new(format!("sourcehut:{}/{}/{}", owner, repo, rev))
+            }
+            Self::Codeberg { owner, repo } => {
+                LockUrl::new(format!("git+https://codeberg.org/{}/{}?rev={}", owner, repo, rev))
+            }
+            Self::Gitea { host, owner, repo } => {
+                LockUrl::new(format!("git+https://{}/{}/{}?rev={}", host, owner, repo, rev))
+            }
+            Self::Generic { .. } => Err(DomainError::InvalidLockUrl),
+        }
+    }
+}
+
+fn sourcehut_owner(owner: &str) -> String {
+    if owner.starts_with('~') {
+        owner.to_string()
+    } else {
+        format!("~{}", owner)
+    }
 }
 
 impl FlakeInput {
@@ -68,7 +204,7 @@ impl FlakeInput {
     pub fn short_rev(&self) -> Option<&str> {
         match self {
             FlakeInput::Git(g) if !g.rev.is_empty() => Some(&g.rev[..7.min(g.rev.len())]),
-            FlakeInput::Other(o) if !o.rev.is_empty() => Some(&o.rev[..7.min(o.rev.len())]),
+            FlakeInput::Other(o) => o.rev.as_deref().map(|rev| &rev[..7.min(rev.len())]),
             _ => None,
         }
     }
@@ -158,6 +294,22 @@ impl ForgeType {
 mod tests {
     use super::*;
 
+    fn owner(value: &str) -> Owner {
+        Owner::new(value).unwrap()
+    }
+
+    fn repo_name(value: &str) -> RepoName {
+        RepoName::new(value).unwrap()
+    }
+
+    fn host(value: &str) -> GitHost {
+        GitHost::new(value).unwrap()
+    }
+
+    fn rev(value: &str) -> GitRev {
+        GitRev::new(value).unwrap()
+    }
+
     #[test]
     fn test_forge_clone_url() {
         assert_eq!(
@@ -237,6 +389,55 @@ mod tests {
     }
 
     #[test]
+    fn test_git_repo_urls() {
+        assert_eq!(
+            GitRepo::github(owner("NixOS"), repo_name("nixpkgs"))
+                .clone_url()
+                .unwrap()
+                .as_str(),
+            "https://github.com/NixOS/nixpkgs.git"
+        );
+
+        assert_eq!(
+            GitRepo::gitlab(Some(host("gitlab.gnome.org")), owner("owner"), repo_name("repo"))
+                .unwrap()
+                .lock_url(&rev("abc1234"))
+                .unwrap()
+                .as_str(),
+            "git+https://gitlab.gnome.org/owner/repo?rev=abc1234"
+        );
+
+        assert_eq!(
+            GitRepo::sourcehut(None, owner("user"), repo_name("repo"))
+                .unwrap()
+                .clone_url()
+                .unwrap()
+                .as_str(),
+            "https://git.sr.ht/~user/repo"
+        );
+
+        assert_eq!(
+            GitRepo::codeberg(owner("owner"), repo_name("repo"))
+                .lock_url(&rev("abc1234"))
+                .unwrap()
+                .as_str(),
+            "git+https://codeberg.org/owner/repo?rev=abc1234"
+        );
+
+        assert_eq!(
+            GitRepo::gitea(host("git.example.org"), owner("owner"), repo_name("repo"))
+                .clone_url()
+                .unwrap()
+                .as_str(),
+            "https://git.example.org/owner/repo.git"
+        );
+
+        assert!(GitRepo::generic(CloneUrl::new("https://example.org/repo.git").unwrap())
+            .lock_url(&rev("abc1234"))
+            .is_err());
+    }
+
+    #[test]
     fn test_flake_input_short_rev() {
         let git = FlakeInput::Git(GitInput {
             name: "nixpkgs".to_string(),
@@ -253,14 +454,14 @@ mod tests {
 
         let short = FlakeInput::Other(OtherInput {
             name: "archive".to_string(),
-            rev: "abc".to_string(),
+            rev: Some("abc".to_string()),
             last_modified: 0,
         });
         assert_eq!(short.short_rev(), Some("abc"));
 
         let empty = FlakeInput::Other(OtherInput {
             name: "archive".to_string(),
-            rev: String::new(),
+            rev: None,
             last_modified: 0,
         });
         assert_eq!(empty.short_rev(), None);

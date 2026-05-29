@@ -366,8 +366,7 @@ impl GitService {
         let mut locked_idx = None;
 
         for (idx, c) in commits.iter().enumerate() {
-            let is_locked = c.sha.starts_with(input.rev()) || c.sha == input.rev();
-            if is_locked {
+            if c.sha.starts_with(input.rev()) || c.sha == input.rev() {
                 locked_idx = Some(idx);
             }
 
@@ -394,14 +393,11 @@ impl GitService {
                 message,
                 author,
                 date,
-                is_locked,
             });
         }
 
-        Ok(ChangelogData {
-            commits: result_commits,
-            locked_idx,
-        })
+        ChangelogData::new(result_commits, locked_idx)
+            .map_err(|e| GitError::CloneFailed(format!("Invalid changelog data: {:?}", e)))
     }
 
     /// Get changelog via GitLab API
@@ -449,8 +445,7 @@ impl GitService {
         let mut locked_idx = None;
 
         for (idx, c) in commits.iter().enumerate() {
-            let is_locked = c.id.starts_with(input.rev()) || c.id == input.rev();
-            if is_locked {
+            if c.id.starts_with(input.rev()) || c.id == input.rev() {
                 locked_idx = Some(idx);
             }
 
@@ -463,14 +458,11 @@ impl GitService {
                 message: c.title.clone(),
                 author: c.author_name.clone(),
                 date,
-                is_locked,
             });
         }
 
-        Ok(ChangelogData {
-            commits: result_commits,
-            locked_idx,
-        })
+        ChangelogData::new(result_commits, locked_idx)
+            .map_err(|e| GitError::CloneFailed(format!("Invalid changelog data: {:?}", e)))
     }
 
     async fn get_git_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
@@ -495,20 +487,14 @@ impl GitService {
                 let mut all_commits = commits_ahead;
                 let locked_idx = if !commits_from_locked.is_empty() {
                     let idx = all_commits.len();
-                    let mut locked_commits = commits_from_locked;
-                    if let Some(first) = locked_commits.first_mut() {
-                        first.is_locked = true;
-                    }
-                    all_commits.extend(locked_commits);
+                    all_commits.extend(commits_from_locked);
                     Some(idx)
                 } else {
                     None
                 };
 
-                Ok(ChangelogData {
-                    commits: all_commits,
-                    locked_idx,
-                })
+                ChangelogData::new(all_commits, locked_idx)
+                    .map_err(|e| GitError::CloneFailed(format!("Invalid changelog data: {:?}", e)))
             }),
         )
         .await;
@@ -790,7 +776,6 @@ fn commit_to_model(commit: &git2::Commit) -> Commit {
         message,
         author,
         date,
-        is_locked: false,
     }
 }
 

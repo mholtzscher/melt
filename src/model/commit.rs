@@ -1,13 +1,12 @@
 use chrono::{DateTime, Utc};
 
-/// A git commit
+/// A git commit.
 #[derive(Debug, Clone)]
 pub struct Commit {
     pub sha: String,
     pub message: String,
     pub author: String,
     pub date: DateTime<Utc>,
-    pub is_locked: bool,
 }
 
 impl Commit {
@@ -17,24 +16,70 @@ impl Commit {
     }
 }
 
-/// Result of fetching changelog for an input
+/// Valid commit index into a `ChangelogData` commit list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommitIndex {
+    index: usize,
+}
+
+impl CommitIndex {
+    pub fn new(index: usize, len: usize) -> Option<Self> {
+        (index < len).then_some(Self { index })
+    }
+
+    pub fn index(self) -> usize {
+        self.index
+    }
+}
+
+/// Error returned when changelog data cannot satisfy its invariants.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChangelogDataError {
+    LockedIndexOutOfRange { index: usize, len: usize },
+}
+
+/// Result of fetching changelog for an input.
 #[derive(Debug, Clone)]
 pub struct ChangelogData {
     pub commits: Vec<Commit>,
-    /// Index of the currently locked commit, or None if not found
-    pub locked_idx: Option<usize>,
+    locked: Option<CommitIndex>,
 }
 
 impl ChangelogData {
+    pub fn new(
+        commits: Vec<Commit>,
+        locked_idx: Option<usize>,
+    ) -> Result<Self, ChangelogDataError> {
+        let locked = match locked_idx {
+            Some(index) => Some(CommitIndex::new(index, commits.len()).ok_or(
+                ChangelogDataError::LockedIndexOutOfRange {
+                    index,
+                    len: commits.len(),
+                },
+            )?),
+            None => None,
+        };
+
+        Ok(Self { commits, locked })
+    }
+
+    pub fn locked_index(&self) -> Option<usize> {
+        self.locked.map(CommitIndex::index)
+    }
+
+    pub fn is_locked(&self, index: usize) -> bool {
+        self.locked_index() == Some(index)
+    }
+
     /// Get the number of new commits (ahead of locked)
     pub fn commits_ahead(&self) -> usize {
-        self.locked_idx.unwrap_or(self.commits.len())
+        self.locked_index().unwrap_or(self.commits.len())
     }
 
     /// Get the number of older commits (including and after locked)
     pub fn commits_behind(&self) -> usize {
-        match self.locked_idx {
-            Some(idx) => self.commits.len().saturating_sub(idx + 1),
+        match self.locked_index() {
+            Some(idx) => self.commits.len() - (idx + 1),
             None => 0,
         }
     }
@@ -51,7 +96,6 @@ mod tests {
                 message: "message".to_string(),
                 author: "author".to_string(),
                 date: Utc::now(),
-                is_locked: false,
             })
             .collect()
     }
@@ -63,7 +107,6 @@ mod tests {
             message: String::new(),
             author: String::new(),
             date: Utc::now(),
-            is_locked: false,
         };
         assert_eq!(commit.short_sha(), "abcdef1");
 
@@ -72,17 +115,13 @@ mod tests {
             message: String::new(),
             author: String::new(),
             date: Utc::now(),
-            is_locked: false,
         };
         assert_eq!(short.short_sha(), "abc");
     }
 
     #[test]
     fn test_changelog_counts_when_locked_commit_is_missing() {
-        let data = ChangelogData {
-            commits: commits(3),
-            locked_idx: None,
-        };
+        let data = ChangelogData::new(commits(3), None).unwrap();
 
         assert_eq!(data.commits_ahead(), 3);
         assert_eq!(data.commits_behind(), 0);
@@ -90,36 +129,29 @@ mod tests {
 
     #[test]
     fn test_changelog_counts_when_locked_commit_is_present() {
-        let data = ChangelogData {
-            commits: commits(5),
-            locked_idx: Some(3),
-        };
+        let data = ChangelogData::new(commits(5), Some(3)).unwrap();
 
         assert_eq!(data.commits_ahead(), 3);
         assert_eq!(data.commits_behind(), 1);
+        assert!(data.is_locked(3));
     }
 
     #[test]
     fn test_changelog_counts_at_edges() {
-        let current = ChangelogData {
-            commits: commits(3),
-            locked_idx: Some(0),
-        };
+        let current = ChangelogData::new(commits(3), Some(0)).unwrap();
         assert_eq!(current.commits_ahead(), 0);
         assert_eq!(current.commits_behind(), 2);
 
-        let empty = ChangelogData {
-            commits: Vec::new(),
-            locked_idx: None,
-        };
+        let empty = ChangelogData::new(Vec::new(), None).unwrap();
         assert_eq!(empty.commits_ahead(), 0);
         assert_eq!(empty.commits_behind(), 0);
+    }
 
-        let out_of_range = ChangelogData {
-            commits: commits(2),
-            locked_idx: Some(5),
-        };
-        assert_eq!(out_of_range.commits_ahead(), 5);
-        assert_eq!(out_of_range.commits_behind(), 0);
+    #[test]
+    fn test_changelog_rejects_out_of_range_locked_commit() {
+        assert!(matches!(
+            ChangelogData::new(commits(2), Some(5)),
+            Err(ChangelogDataError::LockedIndexOutOfRange { index: 5, len: 2 })
+        ));
     }
 }

@@ -53,9 +53,11 @@ fn render_commits_table(frame: &mut Frame, cs: &mut ChangelogState, area: Rect) 
         .data
         .commits
         .iter()
-        .map(|commit| {
-            let lock_icon = if commit.is_locked { "🔒" } else { "  " };
-            let sha_color = if commit.is_locked {
+        .enumerate()
+        .map(|(idx, commit)| {
+            let is_locked = cs.data.is_locked(idx);
+            let lock_icon = if is_locked { "🔒" } else { "  " };
+            let sha_color = if is_locked {
                 theme::WARNING
             } else {
                 theme::SHA

@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use ratatui::widgets::TableState;
 
 use crate::error::{AppError, GitError};
-use crate::model::{ChangelogData, FlakeData, GitInput, UpdateStatus};
+use crate::model::{ChangelogData, FlakeData, GitInput, InputName, UpdateStatus};
 
 /// Application state machine
 #[derive(Debug)]
@@ -52,16 +52,53 @@ pub enum StateKind {
     Quitting,
 }
 
+/// Cursor position in the list view. Constructed by `ListState` so it is
+/// always valid for the current non-empty input list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ListCursor {
+    index: usize,
+}
+
+impl ListCursor {
+    pub fn index(self) -> usize {
+        self.index
+    }
+
+    fn new(index: usize, len: usize) -> Option<Self> {
+        if len == 0 {
+            None
+        } else {
+            Some(Self {
+                index: index.min(len - 1),
+            })
+        }
+    }
+}
+
+/// Current operation mode for the list view.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ListMode {
+    Idle,
+    Refreshing,
+    UpdatingAll,
+    UpdatingSelected { inputs: Vec<InputName> },
+}
+
+impl ListMode {
+    pub fn is_busy(&self) -> bool {
+        !matches!(self, ListMode::Idle)
+    }
+}
+
 /// State for the list view
 #[derive(Debug)]
 pub struct ListState {
     pub flake: FlakeData,
-    pub cursor: usize,
-    pub selected: HashSet<usize>,
+    pub cursor: Option<ListCursor>,
+    pub selected: HashSet<InputName>,
     pub table_state: TableState,
     pub update_statuses: HashMap<String, UpdateStatus>,
-    /// True when a background operation is in progress
-    pub busy: bool,
+    pub mode: ListMode,
 }
 
 impl ListState {
@@ -71,38 +108,52 @@ impl ListState {
         if !flake.inputs.is_empty() {
             table_state.select(Some(0));
         }
+        let cursor = ListCursor::new(0, flake.inputs.len());
         Self {
             flake,
-            cursor: 0,
+            cursor,
             selected: HashSet::new(),
             table_state,
             update_statuses: HashMap::new(),
-            busy: false,
+            mode: ListMode::Idle,
         }
     }
 
     /// Move cursor down
     pub fn cursor_down(&mut self) {
-        if self.cursor < self.flake.inputs.len().saturating_sub(1) {
-            self.cursor += 1;
-            self.table_state.select(Some(self.cursor));
-        }
+        let Some(cursor) = self.cursor else {
+            return;
+        };
+        let next = (cursor.index() + 1).min(self.flake.inputs.len().saturating_sub(1));
+        self.cursor = ListCursor::new(next, self.flake.inputs.len());
+        self.table_state.select(Some(next));
     }
 
     /// Move cursor up
     pub fn cursor_up(&mut self) {
-        if self.cursor > 0 {
-            self.cursor -= 1;
-            self.table_state.select(Some(self.cursor));
-        }
+        let Some(cursor) = self.cursor else {
+            return;
+        };
+        let next = cursor.index().saturating_sub(1);
+        self.cursor = ListCursor::new(next, self.flake.inputs.len());
+        self.table_state.select(Some(next));
     }
 
     /// Toggle selection at cursor
     pub fn toggle_selection(&mut self) {
-        if self.selected.contains(&self.cursor) {
-            self.selected.remove(&self.cursor);
+        let Some(cursor) = self.cursor else {
+            return;
+        };
+        let Some(input) = self.flake.inputs.get(cursor.index()) else {
+            return;
+        };
+        let Ok(name) = InputName::new(input.name()) else {
+            return;
+        };
+        if self.selected.contains(&name) {
+            self.selected.remove(&name);
         } else {
-            self.selected.insert(self.cursor);
+            self.selected.insert(name);
         }
     }
 
@@ -121,17 +172,30 @@ impl ListState {
         self.flake.inputs.len()
     }
 
+    /// Get the current cursor index, if the list is non-empty.
+    pub fn current_index(&self) -> Option<usize> {
+        self.cursor.map(ListCursor::index)
+    }
+
     /// Update with new flake data (for refresh)
     pub fn update_flake(&mut self, flake: FlakeData) {
         self.flake = flake;
-        self.busy = false;
-        // Clamp cursor to new input count
-        if self.cursor >= self.flake.inputs.len() {
-            self.cursor = self.flake.inputs.len().saturating_sub(1);
-            self.table_state.select(Some(self.cursor));
-        }
-        // Clear selections that are now out of bounds
-        self.selected.retain(|&i| i < self.flake.inputs.len());
+        self.mode = ListMode::Idle;
+        // Clamp cursor to new input count, or clear it for an empty list.
+        let next_cursor = self
+            .cursor
+            .and_then(|cursor| ListCursor::new(cursor.index(), self.flake.inputs.len()))
+            .or_else(|| ListCursor::new(0, self.flake.inputs.len()));
+        self.cursor = next_cursor;
+        self.table_state.select(self.cursor.map(ListCursor::index));
+        // Keep only selections whose input names still exist after refresh.
+        let existing_names: HashSet<InputName> = self
+            .flake
+            .inputs
+            .iter()
+            .filter_map(|input| InputName::new(input.name()).ok())
+            .collect();
+        self.selected.retain(|name| existing_names.contains(name));
         // Clear old update statuses
         self.update_statuses.clear();
     }
@@ -145,7 +209,7 @@ impl Clone for ListState {
             selected: self.selected.clone(),
             table_state: TableState::default().with_selected(self.table_state.selected()),
             update_statuses: self.update_statuses.clone(),
-            busy: self.busy,
+            mode: self.mode.clone(),
         }
     }
 }
@@ -170,7 +234,7 @@ pub struct ChangelogState {
 impl ChangelogState {
     /// Create a new ChangelogState
     pub fn new(input: GitInput, data: ChangelogData, parent_list: ListState) -> Self {
-        let cursor = data.locked_idx.unwrap_or(0);
+        let cursor = data.locked_index().unwrap_or(0);
         let mut table_state = TableState::default();
         if !data.commits.is_empty() {
             table_state.select(Some(cursor));
@@ -240,4 +304,57 @@ pub enum TaskResult {
     LockComplete(Result<(), AppError>),
     /// Status update for a single input
     InputStatus { name: String, status: UpdateStatus },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{FlakeInput, PathInput};
+    use std::path::PathBuf;
+
+    fn flake(names: &[&str]) -> FlakeData {
+        FlakeData {
+            path: PathBuf::from("/tmp/flake"),
+            inputs: names
+                .iter()
+                .map(|name| {
+                    FlakeInput::Path(PathInput {
+                        name: (*name).to_string(),
+                    })
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn list_state_empty_list_has_no_cursor() {
+        let list = ListState::new(flake(&[]));
+        assert_eq!(list.current_index(), None);
+    }
+
+    #[test]
+    fn list_state_selection_survives_reorder_by_name() {
+        let mut list = ListState::new(flake(&["a", "b"]));
+        list.cursor_down();
+        list.toggle_selection();
+        assert!(list.selected.contains(&InputName::new("b").unwrap()));
+
+        list.update_flake(flake(&["b", "a"]));
+
+        assert!(list.selected.contains(&InputName::new("b").unwrap()));
+        assert!(!list.selected.contains(&InputName::new("a").unwrap()));
+    }
+
+    #[test]
+    fn list_state_selection_drops_missing_names_after_refresh() {
+        let mut list = ListState::new(flake(&["a", "b"]));
+        list.toggle_selection();
+        list.cursor_down();
+        list.toggle_selection();
+
+        list.update_flake(flake(&["b"]));
+
+        assert_eq!(list.selected.len(), 1);
+        assert!(list.selected.contains(&InputName::new("b").unwrap()));
+    }
 }

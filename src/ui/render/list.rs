@@ -39,9 +39,11 @@ fn render_input_table(frame: &mut Frame, list: &mut ListState, area: Rect, tick_
         .flake
         .inputs
         .iter()
-        .enumerate()
-        .map(|(idx, input)| {
-            let is_selected = list.selected.contains(&idx);
+        .map(|input| {
+            let is_selected = list
+                .selected
+                .iter()
+                .any(|name| name.as_str() == input.name());
             let checkbox = if is_selected { "[x]" } else { "[ ]" };
             let checkbox_style = if is_selected {
                 Style::default()
@@ -164,7 +166,10 @@ fn render_help_bar(
     }
 
     // Show error message for current input if it has an error status
-    if let Some(input) = list.flake.inputs.get(list.cursor) {
+    if let Some(input) = list
+        .current_index()
+        .and_then(|idx| list.flake.inputs.get(idx))
+    {
         if let Some(UpdateStatus::Error(err)) = list.update_statuses.get(input.name()) {
             let truncated = truncate_with_ellipsis(err, 60);
             spans.push(Span::styled(

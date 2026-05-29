@@ -7,7 +7,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use crate::event::KeyEventExt;
 use crate::model::{FlakeInput, GitRev};
 
-use super::state::{AppState, ChangelogState, ListState, StateKind};
+use super::state::{AppState, ChangelogState, ListMode, ListState, StateKind};
 
 /// Actions that can result from handling input
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,7 +69,7 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> Action {
 fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
     let input_count = list.input_count();
     let has_selection = list.has_selection();
-    let is_busy = list.busy;
+    let is_busy = list.mode.is_busy();
 
     if input_count == 0 {
         if key.is_quit() {
@@ -108,12 +108,20 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
             let names: Vec<String> = list
                 .selected
                 .iter()
-                .filter_map(|&i| list.flake.inputs.get(i))
-                .map(|input| input.name().to_string())
+                .filter(|name| {
+                    list.flake
+                        .inputs
+                        .iter()
+                        .any(|input| input.name() == name.as_str())
+                })
+                .map(ToString::to_string)
                 .collect();
 
             if !names.is_empty() {
-                list.busy = true;
+                let selected_inputs = list.selected.iter().cloned().collect();
+                list.mode = ListMode::UpdatingSelected {
+                    inputs: selected_inputs,
+                };
                 Action::UpdateSelected(names)
             } else {
                 Action::ShowWarning("No inputs selected".to_string())
@@ -123,21 +131,23 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
             if is_busy {
                 return Action::None;
             }
-            list.busy = true;
+            list.mode = ListMode::UpdatingAll;
             Action::UpdateAll
         }
         KeyCode::Char('r') => {
             if is_busy {
                 return Action::None;
             }
-            list.busy = true;
+            list.mode = ListMode::Refreshing;
             Action::Refresh
         }
         KeyCode::Char('c') => {
             if is_busy {
                 return Action::None;
             }
-            let idx = list.cursor;
+            let Some(idx) = list.current_index() else {
+                return Action::None;
+            };
             if let Some(FlakeInput::Git(_)) = list.flake.inputs.get(idx) {
                 Action::OpenChangelog { input_idx: idx }
             } else {

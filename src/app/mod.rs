@@ -23,7 +23,7 @@ use crate::tui::Tui;
 use crate::ui::render;
 
 pub use handler::Action;
-pub use state::{AppState, ChangelogLoadedData, ChangelogState, ListState, TaskResult};
+pub use state::{AppState, ChangelogLoadedData, ChangelogState, ListMode, ListState, TaskResult};
 
 /// Main application struct
 pub struct App {
@@ -173,7 +173,7 @@ impl App {
                     if let Some(FlakeInput::Git(git_input)) = list.flake.inputs.get(input_idx) {
                         let input = git_input.clone();
                         let mut parent = list.clone();
-                        parent.busy = false;
+                        parent.mode = ListMode::Idle;
                         self.status_message =
                             Some(StatusMessage::info("Loading commit history..."));
                         self.state = AppState::LoadingChangelog(parent.clone());
@@ -236,7 +236,7 @@ impl App {
                 warn!(error = %e, "Update failed");
                 self.status_message = Some(StatusMessage::error(format!("Update failed: {}", e)));
                 if let AppState::List(list) = &mut self.state {
-                    list.busy = false;
+                    list.mode = ListMode::Idle;
                     list.update_statuses
                         .retain(|_, status| !matches!(status, UpdateStatus::Updating));
                 }
@@ -269,7 +269,7 @@ impl App {
                     std::mem::replace(&mut self.state, AppState::Loading)
                 {
                     let mut list = cs.parent_list;
-                    list.busy = true;
+                    list.mode = ListMode::Refreshing;
                     self.state = AppState::List(list);
                 }
                 self.spawn_load_flake();

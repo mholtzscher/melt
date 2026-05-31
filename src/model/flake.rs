@@ -75,18 +75,6 @@ impl GitInput {
         &self.repo
     }
 
-    pub fn owner(&self) -> Option<&str> {
-        self.repo.owner()
-    }
-
-    pub fn repo_name(&self) -> Option<&str> {
-        self.repo.repo_name()
-    }
-
-    pub fn host(&self) -> Option<&str> {
-        self.repo.host()
-    }
-
     pub fn clone_url(&self) -> Result<CloneUrl, DomainError> {
         self.repo.clone_url()
     }
@@ -182,37 +170,6 @@ impl GitRepo {
 
     pub fn generic(clone_url: CloneUrl) -> Self {
         Self::Generic { clone_url }
-    }
-
-    pub fn owner(&self) -> Option<&str> {
-        match self {
-            Self::GitHub { owner, .. }
-            | Self::GitLab { owner, .. }
-            | Self::SourceHut { owner, .. }
-            | Self::Codeberg { owner, .. }
-            | Self::Gitea { owner, .. } => Some(owner.as_str()),
-            Self::Generic { .. } => None,
-        }
-    }
-
-    pub fn repo_name(&self) -> Option<&str> {
-        match self {
-            Self::GitHub { repo, .. }
-            | Self::GitLab { repo, .. }
-            | Self::SourceHut { repo, .. }
-            | Self::Codeberg { repo, .. }
-            | Self::Gitea { repo, .. } => Some(repo.as_str()),
-            Self::Generic { .. } => None,
-        }
-    }
-
-    pub fn host(&self) -> Option<&str> {
-        match self {
-            Self::GitLab { host, .. } | Self::SourceHut { host, .. } | Self::Gitea { host, .. } => {
-                Some(host.as_str())
-            }
-            _ => None,
-        }
     }
 
     pub fn clone_url(&self) -> Result<CloneUrl, DomainError> {

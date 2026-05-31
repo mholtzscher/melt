@@ -12,7 +12,9 @@ use tracing::{debug, warn};
 
 use crate::config::ServiceConfig;
 use crate::error::GitError;
-use crate::model::{ChangelogData, Commit, GitInput, GitRepo, InputName, UpdateStatus};
+use crate::model::{
+    ChangelogData, Commit, GitHost, GitInput, GitRepo, InputName, Owner, RepoName, UpdateStatus,
+};
 
 /// Service for git operations - uses APIs where possible, falls back to git2
 #[derive(Clone)]
@@ -74,12 +76,12 @@ impl GitService {
 
         let mut join_set = JoinSet::new();
 
-        let git_inputs = inputs.to_vec();
-        for input in git_inputs {
+        for input in inputs {
             if self.cancel_token.is_cancelled() {
                 break;
             }
 
+            let input = input.clone();
             let service = self.clone();
             let semaphore = self.semaphore.clone();
 
@@ -133,8 +135,10 @@ impl GitService {
 
     async fn check_input_updates(&self, input: &GitInput) -> Result<usize, GitError> {
         match input.repo() {
-            GitRepo::GitHub { .. } => self.check_github_updates(input).await,
-            GitRepo::GitLab { .. } => self.check_gitlab_updates(input).await,
+            GitRepo::GitHub { owner, repo } => self.check_github_updates(input, owner, repo).await,
+            GitRepo::GitLab { host, owner, repo } => {
+                self.check_gitlab_updates(input, host, owner, repo).await
+            }
             GitRepo::SourceHut { .. }
             | GitRepo::Codeberg { .. }
             | GitRepo::Gitea { .. }
@@ -142,12 +146,17 @@ impl GitService {
         }
     }
 
-    async fn check_github_updates(&self, input: &GitInput) -> Result<usize, GitError> {
+    async fn check_github_updates(
+        &self,
+        input: &GitInput,
+        owner: &Owner,
+        repo: &RepoName,
+    ) -> Result<usize, GitError> {
         let branch = input.reference().unwrap_or("HEAD");
         let url = format!(
             "https://api.github.com/repos/{}/{}/compare/{}...{}",
-            input.owner().unwrap_or(""),
-            input.repo_name().unwrap_or(""),
+            owner,
+            repo,
             input.rev(),
             branch
         );
@@ -198,14 +207,15 @@ impl GitService {
         Ok(data.ahead_by)
     }
 
-    async fn check_gitlab_updates(&self, input: &GitInput) -> Result<usize, GitError> {
-        let host = input.host().unwrap_or("gitlab.com");
+    async fn check_gitlab_updates(
+        &self,
+        input: &GitInput,
+        host: &GitHost,
+        owner: &Owner,
+        repo: &RepoName,
+    ) -> Result<usize, GitError> {
         let branch = input.reference().unwrap_or("HEAD");
-        let project = format!(
-            "{}/{}",
-            input.owner().unwrap_or(""),
-            input.repo_name().unwrap_or("")
-        );
+        let project = format!("{}/{}", owner, repo);
         let encoded_project = urlencoding(&project);
 
         let url = format!(
@@ -277,8 +287,10 @@ impl GitService {
         debug!(input = %input.name(), repo = ?input.repo(), "Loading changelog");
 
         match input.repo() {
-            GitRepo::GitHub { .. } => self.get_github_changelog(input).await,
-            GitRepo::GitLab { .. } => self.get_gitlab_changelog(input).await,
+            GitRepo::GitHub { owner, repo } => self.get_github_changelog(input, owner, repo).await,
+            GitRepo::GitLab { host, owner, repo } => {
+                self.get_gitlab_changelog(input, host, owner, repo).await
+            }
             GitRepo::SourceHut { .. }
             | GitRepo::Codeberg { .. }
             | GitRepo::Gitea { .. }
@@ -287,15 +299,18 @@ impl GitService {
     }
 
     /// Get changelog via GitHub API
-    async fn get_github_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
+    async fn get_github_changelog(
+        &self,
+        input: &GitInput,
+        owner: &Owner,
+        repo: &RepoName,
+    ) -> Result<ChangelogData, GitError> {
         let branch = input.reference().unwrap_or("HEAD");
 
         // Get commits from branch
         let url = format!(
             "https://api.github.com/repos/{}/{}/commits?sha={}&per_page=100",
-            input.owner().unwrap_or(""),
-            input.repo_name().unwrap_or(""),
-            branch
+            owner, repo, branch
         );
 
         let mut req = self.client.get(&url);
@@ -393,15 +408,16 @@ impl GitService {
     }
 
     /// Get changelog via GitLab API
-    async fn get_gitlab_changelog(&self, input: &GitInput) -> Result<ChangelogData, GitError> {
-        let host = input.host().unwrap_or("gitlab.com");
+    async fn get_gitlab_changelog(
+        &self,
+        input: &GitInput,
+        host: &GitHost,
+        owner: &Owner,
+        repo: &RepoName,
+    ) -> Result<ChangelogData, GitError> {
         let branch = input.reference().unwrap_or("HEAD");
 
-        let project = format!(
-            "{}/{}",
-            input.owner().unwrap_or(""),
-            input.repo_name().unwrap_or("")
-        );
+        let project = format!("{}/{}", owner, repo);
         let encoded_project = urlencoding(&project);
 
         let url = format!(

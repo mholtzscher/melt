@@ -5,9 +5,9 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::event::KeyEventExt;
-use crate::model::FlakeInput;
+use crate::model::{FlakeInput, InputName, LockUrl};
 
-use super::state::{AppState, ChangelogState, ListState, StateKind};
+use super::state::{AppState, ChangelogState, ListMode, ListState, StateKind};
 
 /// Actions that can result from handling input
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,19 +19,19 @@ pub enum Action {
     /// Cancel current operation and quit
     CancelAndQuit,
     /// Update selected inputs
-    UpdateSelected(Vec<String>),
+    UpdateSelected(Vec<InputName>),
     /// Update all inputs
     UpdateAll,
     /// Refresh flake data
     Refresh,
-    /// Open commit history for input at index
-    OpenChangelog { input_idx: usize },
+    /// Open commit history for a validated git input
+    OpenChangelog { input: crate::model::GitInput },
     /// Close commit history and return to list
     CloseChangelog,
     /// Confirm lock to commit
     ConfirmLock {
-        input_name: String,
-        lock_url: String,
+        input_name: InputName,
+        lock_url: LockUrl,
     },
     /// Show warning message
     ShowWarning(String),
@@ -69,7 +69,7 @@ pub fn handle_key(state: &mut AppState, key: KeyEvent) -> Action {
 fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
     let input_count = list.input_count();
     let has_selection = list.has_selection();
-    let is_busy = list.busy;
+    let is_busy = list.mode.is_busy();
 
     if input_count == 0 {
         if key.is_quit() {
@@ -105,15 +105,22 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
             if is_busy {
                 return Action::None;
             }
-            let names: Vec<String> = list
+            let names: Vec<InputName> = list
                 .selected
                 .iter()
-                .filter_map(|&i| list.flake.inputs.get(i))
-                .map(|input| input.name().to_string())
+                .filter(|name| {
+                    list.flake
+                        .inputs
+                        .iter()
+                        .any(|input| input.name() == name.as_str())
+                })
+                .cloned()
                 .collect();
 
             if !names.is_empty() {
-                list.busy = true;
+                list.mode = ListMode::UpdatingSelected {
+                    inputs: names.clone(),
+                };
                 Action::UpdateSelected(names)
             } else {
                 Action::ShowWarning("No inputs selected".to_string())
@@ -123,23 +130,27 @@ fn handle_list_key(list: &mut ListState, key: KeyEvent) -> Action {
             if is_busy {
                 return Action::None;
             }
-            list.busy = true;
+            list.mode = ListMode::UpdatingAll;
             Action::UpdateAll
         }
         KeyCode::Char('r') => {
             if is_busy {
                 return Action::None;
             }
-            list.busy = true;
+            list.mode = ListMode::Refreshing;
             Action::Refresh
         }
         KeyCode::Char('c') => {
             if is_busy {
                 return Action::None;
             }
-            let idx = list.cursor;
-            if let Some(FlakeInput::Git(_)) = list.flake.inputs.get(idx) {
-                Action::OpenChangelog { input_idx: idx }
+            let Some(idx) = list.current_index() else {
+                return Action::None;
+            };
+            if let Some(FlakeInput::Git(input)) = list.flake.inputs.get(idx) {
+                Action::OpenChangelog {
+                    input: input.clone(),
+                }
             } else {
                 Action::ShowWarning("Commit history only available for git inputs".to_string())
             }
@@ -177,25 +188,16 @@ fn handle_changelog_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
 fn handle_confirm_key(cs: &mut ChangelogState, key: KeyEvent) -> Action {
     match key.code {
         KeyCode::Char('y') => {
-            let Some(commit_idx) = cs.confirm_lock else {
+            let Some(target) = cs.lock_target() else {
                 return Action::None;
             };
-            let Some(commit) = cs.data.commits.get(commit_idx) else {
-                return Action::None;
-            };
-
-            let Some(lock_url) = cs.input.forge_type.lock_url(
-                &cs.input.owner,
-                &cs.input.repo,
-                &commit.sha,
-                cs.input.host.as_deref(),
-            ) else {
+            let Ok(lock_url) = cs.input.lock_url(target.target_rev()) else {
                 cs.hide_confirm();
                 return Action::ShowWarning("Cannot generate lock URL for this input".to_string());
             };
 
             Action::ConfirmLock {
-                input_name: cs.input.name.clone(),
+                input_name: cs.input.input_name().clone(),
                 lock_url,
             }
         }

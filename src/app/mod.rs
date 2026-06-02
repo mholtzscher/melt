@@ -17,13 +17,13 @@ use tracing::{debug, warn};
 
 use crate::error::AppResult;
 use crate::event::poll_key;
-use crate::model::{FlakeInput, GitInput, StatusMessage, UpdateStatus};
+use crate::model::{FlakeInput, GitInput, InputName, StatusMessage, UpdateStatus};
 use crate::service::{GitService, NixService};
 use crate::tui::Tui;
 use crate::ui::render;
 
 pub use handler::Action;
-pub use state::{AppState, ChangelogLoadedData, ChangelogState, ListState, TaskResult};
+pub use state::{AppState, ChangelogLoadedData, ChangelogState, ListMode, ListState, TaskResult};
 
 /// Main application struct
 pub struct App {
@@ -157,8 +157,9 @@ impl App {
                 self.status_message = Some(StatusMessage::info("Updating all inputs..."));
                 if let AppState::List(list) = &mut self.state {
                     for input in &list.flake.inputs {
-                        list.update_statuses
-                            .insert(input.name().to_string(), UpdateStatus::Updating);
+                        if let Ok(name) = InputName::new(input.name()) {
+                            list.update_statuses.insert(name, UpdateStatus::Updating);
+                        }
                     }
                     let path = list.flake.path.clone();
                     self.spawn_update_all(path);
@@ -168,17 +169,13 @@ impl App {
                 self.status_message = Some(StatusMessage::info("Refreshing..."));
                 self.spawn_load_flake();
             }
-            Action::OpenChangelog { input_idx } => {
+            Action::OpenChangelog { input } => {
                 if let AppState::List(list) = &self.state {
-                    if let Some(FlakeInput::Git(git_input)) = list.flake.inputs.get(input_idx) {
-                        let input = git_input.clone();
-                        let mut parent = list.clone();
-                        parent.busy = false;
-                        self.status_message =
-                            Some(StatusMessage::info("Loading commit history..."));
-                        self.state = AppState::LoadingChangelog(parent.clone());
-                        self.spawn_load_changelog(input, parent);
-                    }
+                    let mut parent = list.clone();
+                    parent.mode = ListMode::Idle;
+                    self.status_message = Some(StatusMessage::info("Loading commit history..."));
+                    self.state = AppState::LoadingChangelog(parent.clone());
+                    self.spawn_load_changelog(input, parent);
                 }
             }
             Action::CloseChangelog => {
@@ -190,15 +187,20 @@ impl App {
             } => {
                 debug!(input = %input_name, "Locking to commit");
                 if let AppState::Changelog(cs) = &self.state {
-                    let commit_idx = cs.confirm_lock.unwrap_or(0);
-                    if let Some(commit) = cs.data.commits.get(commit_idx) {
-                        self.status_message = Some(StatusMessage::info(format!(
-                            "Locking {} to {}...",
-                            input_name,
-                            commit.short_sha()
-                        )));
+                    if let Some(target) = cs.lock_target() {
+                        if let Some(commit) = cs.data.commits.get(target.commit_idx()) {
+                            self.status_message = Some(StatusMessage::info(format!(
+                                "Locking {} to {}...",
+                                input_name,
+                                commit.short_sha()
+                            )));
+                        }
                     }
-                    self.spawn_lock(cs.parent_list.flake.path.clone(), input_name, lock_url);
+                    self.spawn_lock(
+                        cs.parent_list.flake.path.clone(),
+                        input_name.into_string(),
+                        lock_url.into_string(),
+                    );
                 }
             }
             Action::ShowWarning(msg) => {
@@ -210,7 +212,14 @@ impl App {
     fn handle_task_result(&mut self, result: TaskResult) {
         match result {
             TaskResult::FlakeLoaded(Ok(flake)) => {
-                let inputs = flake.inputs.clone();
+                let inputs: Vec<GitInput> = flake
+                    .inputs
+                    .iter()
+                    .filter_map(|input| match input {
+                        FlakeInput::Git(git_input) => Some(git_input.clone()),
+                        _ => None,
+                    })
+                    .collect();
                 if let AppState::List(list) = &mut self.state {
                     list.update_flake(flake);
                 } else {
@@ -236,7 +245,7 @@ impl App {
                 warn!(error = %e, "Update failed");
                 self.status_message = Some(StatusMessage::error(format!("Update failed: {}", e)));
                 if let AppState::List(list) = &mut self.state {
-                    list.busy = false;
+                    list.mode = ListMode::Idle;
                     list.update_statuses
                         .retain(|_, status| !matches!(status, UpdateStatus::Updating));
                 }
@@ -269,7 +278,7 @@ impl App {
                     std::mem::replace(&mut self.state, AppState::Loading)
                 {
                     let mut list = cs.parent_list;
-                    list.busy = true;
+                    list.mode = ListMode::Refreshing;
                     self.state = AppState::List(list);
                 }
                 self.spawn_load_flake();
@@ -300,11 +309,12 @@ impl App {
         });
     }
 
-    fn spawn_update(&self, path: PathBuf, names: Vec<String>) {
+    fn spawn_update(&self, path: PathBuf, names: Vec<InputName>) {
         let nix = self.nix.clone();
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
+            let names: Vec<String> = names.into_iter().map(InputName::into_string).collect();
             let result = nix.update_inputs(&path, &names).await;
             let _ = tx.send(TaskResult::UpdateComplete(result));
         });
@@ -346,17 +356,14 @@ impl App {
         });
     }
 
-    fn spawn_check_updates(&self, inputs: Vec<FlakeInput>) {
+    fn spawn_check_updates(&self, inputs: Vec<GitInput>) {
         let git = self.git.clone();
         let tx = self.task_tx.clone();
 
         tokio::spawn(async move {
             let _ = git
                 .check_updates(&inputs, |name, status| {
-                    let _ = tx.send(TaskResult::InputStatus {
-                        name: name.to_string(),
-                        status,
-                    });
+                    let _ = tx.send(TaskResult::InputStatus { name, status });
                 })
                 .await;
         });

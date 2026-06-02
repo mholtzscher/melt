@@ -26,7 +26,7 @@ pub fn render_changelog(
     render_commits_table(frame, cs, chunks[0]);
     render_changelog_help_bar(frame, cs, status_message, chunks[1]);
 
-    if cs.confirm_lock.is_some() {
+    if cs.is_confirming() {
         render_confirm_dialog(frame, cs, area);
     }
 }
@@ -37,7 +37,7 @@ fn render_commits_table(frame: &mut Frame, cs: &mut ChangelogState, area: Rect) 
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(theme::BORDER))
-            .title(format!(" {} ({}) ", cs.input.name, cs.input.url))
+            .title(format!(" {} ({}) ", cs.input.name(), cs.input.url()))
             .title_style(Style::default().fg(theme::TEXT));
 
         let msg = Paragraph::new("Already up to date!")
@@ -53,9 +53,11 @@ fn render_commits_table(frame: &mut Frame, cs: &mut ChangelogState, area: Rect) 
         .data
         .commits
         .iter()
-        .map(|commit| {
-            let lock_icon = if commit.is_locked { "🔒" } else { "  " };
-            let sha_color = if commit.is_locked {
+        .enumerate()
+        .map(|(idx, commit)| {
+            let is_locked = cs.data.is_locked(idx);
+            let lock_icon = if is_locked { "🔒" } else { "  " };
+            let sha_color = if is_locked {
                 theme::WARNING
             } else {
                 theme::SHA
@@ -90,7 +92,7 @@ fn render_commits_table(frame: &mut Frame, cs: &mut ChangelogState, area: Rect) 
         Constraint::Min(20),
     ];
 
-    let title = format!(" {} ({}) ", cs.input.name, cs.input.url);
+    let title = format!(" {} ({}) ", cs.input.name(), cs.input.url());
     let table = Table::new(rows, widths)
         .block(
             Block::default()
@@ -168,12 +170,11 @@ fn render_changelog_help_bar(
 
 /// Render the confirmation dialog
 fn render_confirm_dialog(frame: &mut Frame, cs: &ChangelogState, area: Rect) {
-    let commit_idx = match cs.confirm_lock {
-        Some(idx) => idx,
-        None => return,
+    let Some(target) = cs.lock_target() else {
+        return;
     };
 
-    let commit = match cs.data.commits.get(commit_idx) {
+    let commit = match cs.data.commits.get(target.commit_idx()) {
         Some(c) => c,
         None => return,
     };
@@ -193,7 +194,7 @@ fn render_confirm_dialog(frame: &mut Frame, cs: &ChangelogState, area: Rect) {
         Line::from(vec![
             Span::styled("Lock ", Style::default().fg(theme::TEXT)),
             Span::styled(
-                &cs.input.name,
+                cs.input.name(),
                 Style::default()
                     .fg(theme::ACCENT)
                     .add_modifier(Modifier::BOLD),

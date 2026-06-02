@@ -10,6 +10,8 @@ A terminal UI for managing Nix flake inputs, built with Rust and ratatui.
 
 ## Commands
 
+For efficient manual TUI validation, see [`docs/smoke-testing.md`](docs/smoke-testing.md).
+
 Assume commands are run from inside the devenv shell. If not, enter it first with:
 
 ```bash

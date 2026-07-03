@@ -47,7 +47,8 @@ impl GitService {
 
         let github_token = std::env::var("GITHUB_TOKEN")
             .or_else(|_| std::env::var("GH_TOKEN"))
-            .ok();
+            .ok()
+            .or_else(Self::github_token_from_gh);
 
         Self {
             cache_dir,
@@ -56,6 +57,26 @@ impl GitService {
             client,
             github_token,
             timeouts,
+        }
+    }
+
+    /// Try to get a GitHub token from the `gh` CLI.
+    fn github_token_from_gh() -> Option<String> {
+        let output = std::process::Command::new("gh")
+            .args(["auth", "token"])
+            .output()
+            .ok()?;
+
+        if !output.status.success() {
+            return None;
+        }
+
+        let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if token.is_empty() {
+            None
+        } else {
+            debug!("Using GitHub token from gh CLI");
+            Some(token)
         }
     }
 

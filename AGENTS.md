@@ -15,7 +15,7 @@ For efficient manual TUI validation, see [`docs/smoke-testing.md`](docs/smoke-te
 Assume commands are run from inside the devenv shell. If not, enter it first with:
 
 ```bash
-nix develop --no-pure-eval
+devenv shell
 ```
 
 **Never commit code unless explicitly prompted by the user.**

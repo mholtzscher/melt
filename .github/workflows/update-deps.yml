@@ -21,11 +21,17 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v22
 
+      - name: Install devenv
+        run: nix profile add nixpkgs#devenv
+
+      - name: Update devenv.lock
+        run: devenv update
+
       - name: Update flake.lock
         run: nix flake update --accept-flake-config
 
       - name: Update Cargo.lock
-        run: nix develop --accept-flake-config --no-pure-eval --command cargo update
+        run: devenv shell cargo update
 
       - name: Update cargoHash
         run: |
@@ -58,4 +64,4 @@ jobs:
           title: "chore: update dependencies"
           commit-message: "chore: update dependencies"
           body: |
-            Updates flake.lock and Cargo.lock using scheduled workflow.
+            Updates devenv.lock, flake.lock, and Cargo.lock using scheduled workflow.

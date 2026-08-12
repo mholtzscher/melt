@@ -29,10 +29,12 @@ Or add to your flake inputs:
 
 ### From source
 
+With [devenv](https://devenv.sh/getting-started/) installed:
+
 ```bash
 git clone https://github.com/anomalyco/melt-rs
 cd melt-rs
-nix develop --no-pure-eval
+devenv shell
 cargo build --release
 ```
 
@@ -107,7 +109,7 @@ src/
 
 ```bash
 # Enter dev shell
-nix develop --no-pure-eval
+devenv shell
 
 # Run
 cargo run -- /path/to/flake

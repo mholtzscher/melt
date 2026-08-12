@@ -4,10 +4,6 @@
   inputs = {
     nixpkgs.url = "github:cachix/devenv-nixpkgs/rolling";
     flake-utils.url = "github:numtide/flake-utils";
-    devenv = {
-      url = "github:cachix/devenv";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   nixConfig = {
@@ -20,8 +16,7 @@
       self,
       nixpkgs,
       flake-utils,
-      devenv,
-    }@inputs:
+    }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
@@ -91,11 +86,6 @@
         };
 
         checks.default = self.packages.${system}.default;
-
-        devShells.default = devenv.lib.mkShell {
-          inherit inputs pkgs;
-          modules = [ ./devenv.nix ];
-        };
 
         formatter = pkgs.nixfmt;
       }

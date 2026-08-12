@@ -16,6 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          ref: main
           token: ${{ secrets.PAT }}
 
       - name: Install Nix
@@ -59,6 +60,7 @@ jobs:
         uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.PAT }}
+          base: main
           branch: chore/update-deps
           delete-branch: true
           title: "chore: update dependencies"

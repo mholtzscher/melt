@@ -45,7 +45,7 @@
 
           src = ./.;
 
-          cargoHash = "sha256-dfYOgXLEh2yqP0WvdCgo+csEJywqMt6WbR1vJ8qbxFg=";
+          cargoHash = "sha256-ytx/406ZMeo8m8dMgG0KHrX8qHHyeXDUxJRYrvfVusY=";
 
           inherit nativeBuildInputs buildInputs;
 
